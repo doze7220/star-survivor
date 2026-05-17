@@ -1,5 +1,17 @@
 const changelog = [
   {
+    version: "v0.1.1 (Alpha 2 Polish)",
+    date: "2026-05-18",
+    description: "Visual upgrades for bullets and engine trails, and dynamic boost effects.",
+    details: [
+      "【バルカン】弾丸の描画を静的円形スプライトから、進行方向に同期した輝く細長い楕円レーザー（白芯＋光彩コア構造）へ刷新",
+      "【スラスター】古い円形煙パーティクルを完全廃止し、連続する美しい「リボントレイル（先細りの光の尾）」を実装",
+      "【ツインバーニア】自機のスラスターをF-14トムキャット風の「シアンブルーの2本リボン」へ拡張。敵機は性格カラーの1本ショートリボンに",
+      "【ブースター】ブーストおよびGO!発艦時に、リボントレイルが瞬時に「太さ2倍の大出力プラズマビーム」へ動的膨張するパルス演出を搭載。キー離脱時は慣性で切り離されて消滅するリアルな挙動を再現",
+      "【バランス】自機の移動速度やHP上限の調整、敵のタイプ出現比率のチューニングを実施"
+    ]
+  },
+  {
     version: "v0.1.0 (Alpha 2)",
     date: "2026-05-18",
     description: "Alpha 2 major update. Added Mothership, Missiles, Booster, and Cielo Navigation.",
