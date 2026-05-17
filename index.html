@@ -213,6 +213,16 @@
             ENEMY_DAMAGE: 15,             // 敵機本体に衝突した際に自機が受けるダメージ量
             ENEMY_BULLET_DAMAGE: 10,      // 敵の弾に当たった際のダメージ
 
+            // 【敵の性格出現確率（初期値、合計値に対する比率）】
+            ENEMY_CHANCE_RAMMER: 30,      // 肉薄・体当たり型 (初期30%)
+            ENEMY_CHANCE_SNIPER: 20,      // 距離維持・遠距離射撃型 (初期20%)
+            ENEMY_CHANCE_DOGFIGHTER: 50,  // すれ違いドッグファイト型 (初期50%)
+
+            // 【敵機カラー設定】
+            COLOR_ENEMY_RAMMER: '#555555',     // 濃いグレー（肉薄型）
+            COLOR_ENEMY_SNIPER: '#aa00ff',     // パープル（遠距離型）
+            COLOR_ENEMY_DOGFIGHTER: '#3366ff', // ブルー（ドッグファイト型）
+
             // 【経験値ジェム・成長システム設定】
             GEM_SIZE: 12,                 // 経験値ジェムのサイズ
             GEM_BASE_EXP: 20,             // ジェム1個あたりから獲得できる基本経験値量
@@ -237,14 +247,31 @@
             // 【エフェクト・演出設定】
             FLASH_DURATION: 8,            // 被弾時の画面フラッシュ・敵の白フラッシュ時間（フレーム数）
             DEBRIS_SPEED_MULT: 5.0,       // 破片の飛び散る初速の最大値
-            DEBRIS_LIFE: 30,              // 破片の生存フレーム数
+            DEBRIS_LIFE: 300,             // 破片の生存フレーム数（約5秒）
+            DEBRIS_SMOKE_COLOR: '#f80',   // デブリの煙パーティクルの色 (自機軌跡と同じオレンジ #f80)
+            DEBRIS_SMOKE_SIZE: 3,         // デブリの煙パーティクルのサイズ (やや小さめの軌跡)
+            DEBRIS_SMOKE_DECAY: 0.03,     // デブリの煙パーティクルの消失速度 (ややゆっくり消える)
+            
+            // 【爆発・破片ダメージ設定】
+            DEBRIS_DAMAGE: 5,             // 爆破時に飛び散る有害破片のダメージ量
+            EXPLOSION_DAMAGE: 15,         // 爆発のダメージ量
+            EXPLOSION_RADIUS: 65,         // 爆発の最大当たり判定半径
+            EXPLOSION_DURATION: 180,      // 爆発の寿命（フレーム数）※約3秒間維持
+            DEBRIS_COUNT_MIN: 3,          // 撃破時に飛び散る有害破片の最小数
+            DEBRIS_COUNT_MAX: 4,          // 撃破時に飛び散る有害破片の最大数
+
+            // 【衝突物理・反動設定】
+            COLLISION_RECOIL_RESTITUTION: 0.8, // 跳ね返りの弾性係数 (0.0 = 吸着, 1.0 = 完全弾性)
+            COLLISION_DAMAGE_BASE: 3,          // 衝突時の基本最低ダメージ
+            COLLISION_DAMAGE_VEL_MULT: 5.0,    // 衝突時の相対速度による追加ダメージ倍率
+
             STAR_LAYERS: [
                 { rate: 0.2, size: 1, count: 150 }, // 遠景レイヤー（スクロール率、星の描画サイズ、描画個数）
                 { rate: 0.5, size: 2, count: 100 }, // 中景レイヤー
                 { rate: 0.8, size: 3, count: 50 }   // 近景レイヤー
             ],
             PARTICLE_SIZE: 6,             // スラスターから出るパーティクルの初期サイズ（半径）
-            PARTICLE_DECAY: 0.04,         // パーティクルの毎フレームのフェードアウト（縮小）速度
+            PARTICLE_DECAY: 0.008,        // パーティクルの毎フレームのフェードアウト速度（小さくすると長持ち）
             PARTICLE_VEL_MULT: 0.5,       // パーティクル生成時にプレイヤーの慣性速度を引き継ぐ割合（0.5 = 50%）
         };
 
@@ -253,21 +280,27 @@
         // ==========================================
         const SpriteCache = {
             player: null,
-            enemy: null,
+            enemyRammer: null,
+            enemySniper: null,
+            enemyDogfighter: null,
             enemyFlash: null,
             bullet: null,
             enemyBullet: null,
             particle: null,
             gem: null,
+            debrisSmoke: null, // デブリの煙用キャッシュ
 
             init: function () {
                 this.player = this.createShip('#0f0', CONFIG.PLAYER_SIZE_W, CONFIG.PLAYER_SIZE_H);  // 緑の自機
-                this.enemy = this.createShip('#f00', CONFIG.ENEMY_SIZE_W, CONFIG.ENEMY_SIZE_H);   // 赤の敵機
+                this.enemyRammer = this.createShip(CONFIG.COLOR_ENEMY_RAMMER, CONFIG.ENEMY_SIZE_W, CONFIG.ENEMY_SIZE_H);   // 濃いグレー
+                this.enemySniper = this.createShip(CONFIG.COLOR_ENEMY_SNIPER, CONFIG.ENEMY_SIZE_W, CONFIG.ENEMY_SIZE_H);   // パープル
+                this.enemyDogfighter = this.createShip(CONFIG.COLOR_ENEMY_DOGFIGHTER, CONFIG.ENEMY_SIZE_W, CONFIG.ENEMY_SIZE_H); // ブルー
                 this.enemyFlash = this.createShip('#fff', CONFIG.ENEMY_SIZE_W, CONFIG.ENEMY_SIZE_H, true); // 白のフラッシュ用敵機
                 this.bullet = this.createCircle('#ff0', CONFIG.BULLET_SIZE);     // 黄色の自機ショット
                 this.enemyBullet = this.createCircle('#f00', CONFIG.BULLET_SIZE); // 赤色の敵機ショット
                 this.particle = this.createCircle('#f80', CONFIG.PARTICLE_SIZE);   // オレンジのパーティクル
                 this.gem = this.createDiamond('#0ff', CONFIG.GEM_SIZE);      // シアンの経験値ジェム
+                this.debrisSmoke = this.createCircle(CONFIG.DEBRIS_SMOKE_COLOR, CONFIG.DEBRIS_SMOKE_SIZE); // デブリの煙
             },
 
             createShip: function (color, w, h, isFlash = false) {
@@ -326,7 +359,8 @@
             state: 'PLAYING', // PLAYING, PAUSED, GAMEOVER
             width: window.innerWidth,
             height: window.innerHeight,
-            damageFlashTimer: 0 // 画面の赤フラッシュ用タイマー
+            damageFlashTimer: 0, // 画面の赤フラッシュ用タイマー
+            isPlayerDying: false // 自機の爆破演出中かどうかのフラグ
         };
 
         const keys = {};
@@ -396,7 +430,7 @@
         };
 
         const entities = {
-            bullets: [], enemyBullets: [], enemies: [], particles: [], gems: [], debris: []
+            bullets: [], enemyBullets: [], enemies: [], particles: [], gems: [], debris: [], explosions: []
         };
 
         // Phase 3: 多重スクロール星背景 (Parallax Starfield)
@@ -407,8 +441,8 @@
             }
         });
 
-        // パーティクル（破片）生成関数
-        function spawnDebris(x, y, color, count, size) {
+        // パーティクル（破片）生成関数 (通常被弾用・当たり判定なし)
+        function spawnDebris(x, y, color, count) {
             for (let i = 0; i < count; i++) {
                 const angle = Math.random() * Math.PI * 2;
                 const speed = Math.random() * CONFIG.DEBRIS_SPEED_MULT + 1.0;
@@ -417,10 +451,68 @@
                     vx: Math.cos(angle) * speed,
                     vy: Math.sin(angle) * speed,
                     color: color,
-                    size: size,
-                    life: 1.0 // 1.0 to 0.0
+                    size: 2 + Math.random() * 2, // 2〜4pxの小さな破片
+                    life: 1.0,
+                    decay: 1.0 / 30, // 0.5秒で素早く消滅
+                    harmful: false // 被弾時の破片はダメージなし
                 });
             }
+        }
+
+        // 有害な破片の生成関数（爆破時に元の機体の慣性を引き継いで飛ぶ・当たり判定あり）
+        function spawnDeathDebris(x, y, color, baseVx, baseVy) {
+            // 数は設定値（DEBRIS_COUNT_MIN〜DEBRIS_COUNT_MAX）のランダム
+            const count = CONFIG.DEBRIS_COUNT_MIN + Math.floor(Math.random() * (CONFIG.DEBRIS_COUNT_MAX - CONFIG.DEBRIS_COUNT_MIN + 1));
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2.0 + Math.random() * CONFIG.DEBRIS_SPEED_MULT;
+                
+                // デブリのサイズは自機サイズ（CONFIG.PLAYER_SIZE_W = 30）の 1/2 〜 1/3
+                // すなわち、10px 〜 15px
+                const size = CONFIG.PLAYER_SIZE_W / 3 + Math.random() * (CONFIG.PLAYER_SIZE_W / 2 - CONFIG.PLAYER_SIZE_W / 3);
+
+                entities.debris.push({
+                    x: x, y: y,
+                    vx: baseVx * 0.5 + Math.cos(angle) * speed, // 慣性を50%引き継ぎつつ飛び散る
+                    vy: baseVy * 0.5 + Math.sin(angle) * speed,
+                    color: color,
+                    size: size,
+                    life: 1.0,
+                    decay: 1.0 / CONFIG.DEBRIS_LIFE, // 5秒で消滅
+                    harmful: true // 敵味方問わずダメージあり
+                });
+            }
+        }
+
+        // 爆発エフェクトの生成関数（敵味方にダメージを与える爆風）
+        function spawnExplosion(x, y, isPlayer = false) {
+            entities.explosions.push({
+                x: x,
+                y: y,
+                maxRadius: CONFIG.EXPLOSION_RADIUS,
+                timer: CONFIG.EXPLOSION_DURATION,
+                maxTimer: CONFIG.EXPLOSION_DURATION,
+                damagedEntities: new Set(), // 重複ダメージ防止用
+                isPlayerExplosion: isPlayer
+            });
+        }
+
+        function getEnemyColor(e) {
+            if (e.personality === 'RAMMER') return CONFIG.COLOR_ENEMY_RAMMER;
+            if (e.personality === 'SNIPER') return CONFIG.COLOR_ENEMY_SNIPER;
+            return CONFIG.COLOR_ENEMY_DOGFIGHTER;
+        }
+
+        // 自機の爆破・死亡プロセス開始
+        function triggerPlayerDeath() {
+            if (GAME.isPlayerDying) return;
+            GAME.isPlayerDying = true;
+            
+            // 自機の爆発
+            spawnExplosion(player.x, player.y, true);
+            
+            // 自機の慣性を引き継いだ緑色の有害破片を撒き散らす
+            spawnDeathDebris(player.x, player.y, '#0f0', player.vx, player.vy);
         }
 
         // ==========================================
@@ -431,10 +523,12 @@
 
             // --- Phase 2: 物理と操作 (Drift Physics) ---
             let ax = 0, ay = 0;
-            if (keys['KeyW'] || keys['ArrowUp']) ay -= playerStats.moveSpeed;
-            if (keys['KeyS'] || keys['ArrowDown']) ay += playerStats.moveSpeed;
-            if (keys['KeyA'] || keys['ArrowLeft']) ax -= playerStats.moveSpeed;
-            if (keys['KeyD'] || keys['ArrowRight']) ax += playerStats.moveSpeed;
+            if (!GAME.isPlayerDying) {
+                if (keys['KeyW'] || keys['ArrowUp']) ay -= playerStats.moveSpeed;
+                if (keys['KeyS'] || keys['ArrowDown']) ay += playerStats.moveSpeed;
+                if (keys['KeyA'] || keys['ArrowLeft']) ax -= playerStats.moveSpeed;
+                if (keys['KeyD'] || keys['ArrowRight']) ax += playerStats.moveSpeed;
+            }
 
             player.vx += ax;
             player.vy += ay;
@@ -486,8 +580,8 @@
             }
 
             // --- ヒートゲージ＆自動エイム射撃ロジック ---
-            // ヒート管理のため、射撃は「左クリック or スペースキー」を押している間のみ作動
-            const isFiringInput = keys['Space'] || mouse.isDown;
+            // ヒート管理のため、射撃は「左クリック or スペースキー」を押している間のみ作動（死亡時は撃てない）
+            const isFiringInput = !GAME.isPlayerDying && (keys['Space'] || mouse.isDown);
 
             if (player.isOverheated) {
                 player.overheatTimer--;
@@ -545,16 +639,217 @@
             for (let i = entities.particles.length - 1; i >= 0; i--) {
                 let p = entities.particles[i];
                 p.x += p.vx; p.y += p.vy;
-                p.life -= CONFIG.PARTICLE_DECAY;
+                p.life -= p.decay || CONFIG.PARTICLE_DECAY;
                 if (p.life <= 0) entities.particles.splice(i, 1);
             }
 
-            // デブリ（破片）の更新
+            // デブリ（破片）の更新と衝突判定
             for (let i = entities.debris.length - 1; i >= 0; i--) {
                 let d = entities.debris[i];
                 d.x += d.vx; d.y += d.vy;
-                d.life -= 1.0 / CONFIG.DEBRIS_LIFE;
+                d.life -= d.decay;
+
+                // 有害な破片が移動する際に後ろに煙パーティクル（軌跡）をはき出す
+                if (d.harmful && d.life > 0.1 && Math.random() < 0.25) {
+                    entities.particles.push({
+                        x: d.x,
+                        y: d.y,
+                        // 進行方向と逆向きにゆっくり放出する
+                        vx: -d.vx * 0.15 + (Math.random() - 0.5) * 0.4,
+                        vy: -d.vy * 0.15 + (Math.random() - 0.5) * 0.4,
+                        life: 0.6,
+                        decay: CONFIG.DEBRIS_SMOKE_DECAY,
+                        type: 'DEBRIS_SMOKE'
+                    });
+                }
+
+                // 有害な爆発破片の当たり判定
+                if (d.harmful && d.life > 0.1) {
+                    // 自機への当たり判定
+                    if (!GAME.isPlayerDying) {
+                        const dx = player.x - d.x;
+                        const dy = player.y - d.y;
+                        const dist = Math.hypot(dx, dy);
+                        const minDist = d.size / 2 + CONFIG.COLLISION_ENEMY_PLAYER / 2; // 自機半径とデブリ半径の合計
+                        if (dist < minDist) {
+                            // 重なり解消 (デブリ側を大きく押し戻し、自機は少しだけ押し戻す)
+                            const overlap = minDist - dist;
+                            const nx = dx / (dist || 1);
+                            const ny = dy / (dist || 1);
+                            
+                            d.x -= nx * overlap * 0.8;
+                            d.y -= ny * overlap * 0.8;
+                            player.x += nx * overlap * 0.2;
+                            player.y += ny * overlap * 0.2;
+
+                            // 相対速度による跳ね返り
+                            const rvx = player.vx - d.vx;
+                            const rvy = player.vy - d.vy;
+                            const velAlongNormal = rvx * nx + rvy * ny;
+
+                            if (velAlongNormal < 0) {
+                                const crashSpeed = Math.hypot(rvx, rvy);
+                                const restitution = CONFIG.COLLISION_RECOIL_RESTITUTION;
+                                
+                                // 反動を適用 (デブリは大きく跳ね返り、自機はわずかに衝撃を受ける)
+                                const dImpulse = (1 + restitution) * crashSpeed * 0.8 + 2.0;
+                                const pImpulse = (1 + restitution) * crashSpeed * 0.2 + 0.5;
+
+                                d.vx -= dImpulse * nx;
+                                d.vy -= dImpulse * ny;
+                                player.vx += pImpulse * nx;
+                                player.vy += pImpulse * ny;
+
+                                // 相対速度比例のダメージを適用
+                                const damage = CONFIG.COLLISION_DAMAGE_BASE + crashSpeed * CONFIG.COLLISION_DAMAGE_VEL_MULT;
+                                playerStats.hp -= damage;
+
+                                // 被弾演出
+                                GAME.damageFlashTimer = CONFIG.FLASH_DURATION;
+                                spawnDebris((player.x + d.x) / 2, (player.y + d.y) / 2, '#0f0', 2);
+                                
+                                // デブリは衝突により耐久力が削られ、少し寿命が減る
+                                d.life -= 0.35; 
+                            }
+                        }
+                    }
+
+                    // 敵機への当たり判定
+                    let hitEnemy = false;
+                    for (let j = entities.enemies.length - 1; j >= 0; j--) {
+                        let e = entities.enemies[j];
+                        const dx = e.x - d.x;
+                        const dy = e.y - d.y;
+                        const dist = Math.hypot(dx, dy);
+                        const minDist = d.size / 2 + CONFIG.ENEMY_SIZE_W / 2;
+                        if (dist < minDist) {
+                            // 重なり解消
+                            const overlap = minDist - dist;
+                            const nx = dx / (dist || 1);
+                            const ny = dy / (dist || 1);
+                            
+                            d.x -= nx * overlap * 0.8;
+                            d.y -= ny * overlap * 0.8;
+                            e.x += nx * overlap * 0.2;
+                            e.y += ny * overlap * 0.2;
+
+                            // 相対速度による跳ね返り
+                            const rvx = e.vx - d.vx;
+                            const rvy = e.vy - d.vy;
+                            const velAlongNormal = rvx * nx + rvy * ny;
+
+                            if (velAlongNormal < 0) {
+                                const crashSpeed = Math.hypot(rvx, rvy);
+                                const restitution = CONFIG.COLLISION_RECOIL_RESTITUTION;
+
+                                const dImpulse = (1 + restitution) * crashSpeed * 0.8 + 2.0;
+                                const eImpulse = (1 + restitution) * crashSpeed * 0.2 + 0.5;
+
+                                d.vx -= dImpulse * nx;
+                                d.vy -= dImpulse * ny;
+                                e.vx += eImpulse * nx;
+                                e.vy += eImpulse * ny;
+
+                                // ダメージ適用
+                                const damage = CONFIG.COLLISION_DAMAGE_BASE + crashSpeed * CONFIG.COLLISION_DAMAGE_VEL_MULT;
+                                e.hp -= damage;
+
+                                // 被弾演出
+                                e.flashTimer = CONFIG.FLASH_DURATION;
+                                let enemyColor = getEnemyColor(e);
+                                spawnDebris((e.x + d.x) / 2, (e.y + d.y) / 2, enemyColor, 2);
+
+                                // デブリ寿命消費
+                                d.life -= 0.35;
+                                hitEnemy = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (d.life <= 0) {
+                        entities.debris.splice(i, 1);
+                        continue;
+                    }
+                }
+
                 if (d.life <= 0) entities.debris.splice(i, 1);
+            }
+
+            // 爆発（爆風）の更新と当たり判定
+            for (let i = entities.explosions.length - 1; i >= 0; i--) {
+                let exp = entities.explosions[i];
+                exp.timer--;
+
+                const progress = 1 - (exp.timer / exp.maxTimer);
+                
+                // --- アニメ風の爆発推移計算 ---
+                // 最初の10%で急拡大、中間80%は最大サイズを維持して震える、最後の10%で急縮小
+                let scale = 1.0;
+                let isShaking = false;
+                if (progress < 0.1) {
+                    scale = Math.sin((progress / 0.1) * (Math.PI / 2)); // Ease-out
+                } else if (progress > 0.9) {
+                    scale = Math.sin(((1.0 - progress) / 0.1) * (Math.PI / 2)); // Ease-in
+                } else {
+                    isShaking = true;
+                    // 維持中は小刻みに震える
+                    scale = 1.0 + (Math.random() - 0.5) * 0.15;
+                }
+
+                // 描画用の揺れオフセットもここで計算しておく（描画時に利用する）
+                exp.shakeX = isShaking ? (Math.random() - 0.5) * 10 : 0;
+                exp.shakeY = isShaking ? (Math.random() - 0.5) * 10 : 0;
+                exp.currentScale = scale; // 描画側で使うために保存
+
+                const currentRadius = exp.maxRadius * scale;
+
+                // 爆発ダメージ判定 (最初の膨張フェーズのみダメージ判定を発生させる)
+                if (progress > 0.02 && progress < 0.15) {
+                    // 自機への爆風判定
+                    if (!GAME.isPlayerDying && !exp.damagedEntities.has('player')) {
+                        const distToPlayer = Math.hypot(player.x - exp.x, player.y - exp.y);
+                        if (distToPlayer < currentRadius + CONFIG.PLAYER_SIZE_W / 2) {
+                            playerStats.hp -= CONFIG.EXPLOSION_DAMAGE;
+                            GAME.damageFlashTimer = CONFIG.FLASH_DURATION;
+                            spawnDebris(player.x, player.y, '#0f0', 3);
+                            exp.damagedEntities.add('player');
+                        }
+                    }
+
+                    // 敵機への爆風判定
+                    for (let j = entities.enemies.length - 1; j >= 0; j--) {
+                        let e = entities.enemies[j];
+                        if (!exp.damagedEntities.has(e)) {
+                            const distToEnemy = Math.hypot(e.x - exp.x, e.y - exp.y);
+                            if (distToEnemy < currentRadius + CONFIG.ENEMY_SIZE_W / 2) {
+                                e.hp -= CONFIG.EXPLOSION_DAMAGE;
+                                e.flashTimer = CONFIG.FLASH_DURATION;
+
+                                let enemyColor = getEnemyColor(e);
+                                spawnDebris(e.x, e.y, enemyColor, 3);
+                                exp.damagedEntities.add(e);
+
+                                if (e.hp <= 0) {
+                                    // 連鎖誘発爆発！
+                                    spawnExplosion(e.x, e.y);
+                                    spawnDeathDebris(e.x, e.y, enemyColor, e.vx, e.vy);
+                                    entities.gems.push({ x: e.x, y: e.y, exp: CONFIG.GEM_BASE_EXP, locked: false, speed: CONFIG.GEM_MAGNET_BASE_SPEED });
+                                    entities.enemies.splice(j, 1);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (exp.timer <= 0) {
+                    // 自機の爆発が完全に消えたらゲームオーバーへ移行
+                    if (exp.isPlayerExplosion) {
+                        GAME.state = 'GAMEOVER';
+                        document.getElementById('game-over-screen').style.display = 'block';
+                    }
+                    entities.explosions.splice(i, 1);
+                }
             }
 
             // 自機の弾の更新
@@ -575,11 +870,10 @@
 
                     // 被弾演出（赤フラッシュ＆破片）
                     GAME.damageFlashTimer = CONFIG.FLASH_DURATION;
-                    spawnDebris(player.x, player.y, '#0f0', 3 + Math.floor(Math.random() * 2), Math.max(2, CONFIG.PLAYER_SIZE_W / 8));
+                    spawnDebris(player.x, player.y, '#0f0', 3 + Math.floor(Math.random() * 2));
 
                     if (playerStats.hp <= 0) {
-                        GAME.state = 'GAMEOVER';
-                        document.getElementById('game-over-screen').style.display = 'block';
+                        triggerPlayerDeath();
                     }
                     continue;
                 }
@@ -592,6 +886,19 @@
             if (entities.enemies.length < CONFIG.ENEMY_MAX_COUNT && Math.random() < CONFIG.ENEMY_SPAWN_BASE_RATE + (playerStats.level * CONFIG.ENEMY_SPAWN_LEVEL_MULT)) {
                 const angle = Math.random() * Math.PI * 2;
                 const dist = Math.max(GAME.width, GAME.height);
+
+                // 性格の決定（CONFIGの設定確率に基づく）
+                const totalChance = CONFIG.ENEMY_CHANCE_RAMMER + CONFIG.ENEMY_CHANCE_SNIPER + CONFIG.ENEMY_CHANCE_DOGFIGHTER;
+                const rand = Math.random() * totalChance;
+                let personality = 'DOGFIGHTER';
+                if (rand < CONFIG.ENEMY_CHANCE_RAMMER) {
+                    personality = 'RAMMER';
+                } else if (rand < CONFIG.ENEMY_CHANCE_RAMMER + CONFIG.ENEMY_CHANCE_SNIPER) {
+                    personality = 'SNIPER';
+                } else {
+                    personality = 'DOGFIGHTER';
+                }
+
                 entities.enemies.push({
                     x: player.x + Math.cos(angle) * dist,
                     y: player.y + Math.sin(angle) * dist,
@@ -601,31 +908,227 @@
                     heat: 0,
                     isOverheated: false,
                     overheatTimer: 0,
-                    fireTimer: Math.floor(Math.random() * CONFIG.ENEMY_FIRE_RATE) // 射撃タイミングをばらけさせる
+                    fireTimer: Math.floor(Math.random() * CONFIG.ENEMY_FIRE_RATE), // 射撃タイミングをばらけさせる
+                    nextShootInterval: CONFIG.ENEMY_FIRE_RATE * (0.75 + Math.random() * 0.5), // 射撃間隔の揺らぎ初期値
+                    personality: personality,
+                    aimOffset: 0,
+                    aimOffsetTimer: 0,
+                    // ドッグファイト/すれ違い用の設定値
+                    offsetX: 0,
+                    offsetY: 0,
+                    dogfightTimer: 0
                 });
+            }
+
+            // --- 敵同士の衝突物理判定 (Enemy-Enemy Collision) ---
+            for (let i = 0; i < entities.enemies.length; i++) {
+                let e1 = entities.enemies[i];
+                for (let j = i + 1; j < entities.enemies.length; j++) {
+                    let e2 = entities.enemies[j];
+                    const dx = e2.x - e1.x;
+                    const dy = e2.y - e1.y;
+                    const dist = Math.hypot(dx, dy);
+                    const minDist = CONFIG.ENEMY_SIZE_W; // 30px
+                    if (dist < minDist) {
+                        // 重なり解消
+                        const overlap = minDist - dist;
+                        const nx = dx / (dist || 1);
+                        const ny = dy / (dist || 1);
+                        e1.x -= nx * overlap * 0.5;
+                        e1.y -= ny * overlap * 0.5;
+                        e2.x += nx * overlap * 0.5;
+                        e2.y += ny * overlap * 0.5;
+
+                        // 相対速度による跳ね返り計算
+                        const rvx = e2.vx - e1.vx;
+                        const rvy = e2.vy - e1.vy;
+                        const velAlongNormal = rvx * nx + rvy * ny;
+
+                        if (velAlongNormal < 0) {
+                            const crashSpeed = Math.hypot(rvx, rvy);
+                            const impulse = (1 + CONFIG.COLLISION_RECOIL_RESTITUTION) * crashSpeed * 0.5 + 1.2;
+
+                            e1.vx -= impulse * nx;
+                            e1.vy -= impulse * ny;
+                            e2.vx += impulse * nx;
+                            e2.vy += impulse * ny;
+
+                            // 相対速度に基づくダメージ適用
+                            const damage = CONFIG.COLLISION_DAMAGE_BASE + crashSpeed * CONFIG.COLLISION_DAMAGE_VEL_MULT;
+                            e1.hp -= damage;
+                            e2.hp -= damage;
+
+                            e1.flashTimer = CONFIG.FLASH_DURATION;
+                            e2.flashTimer = CONFIG.FLASH_DURATION;
+
+                            // 接触火花デブリ
+                            spawnDebris((e1.x + e2.x) / 2, (e1.y + e2.y) / 2, getEnemyColor(e1), 2);
+                            spawnDebris((e1.x + e2.x) / 2, (e1.y + e2.y) / 2, getEnemyColor(e2), 2);
+                        }
+                    }
+                }
             }
 
             for (let i = entities.enemies.length - 1; i >= 0; i--) {
                 let e = entities.enemies[i];
                 const edx = player.x - e.x;
                 const edy = player.y - e.y;
-                e.angle = Math.atan2(edy, edx);
+                const distToPlayer = Math.hypot(edx, edy);
 
-                // 敵の慣性移動処理
-                e.vx += Math.cos(e.angle) * CONFIG.ENEMY_ACCEL;
-                e.vy += Math.sin(e.angle) * CONFIG.ENEMY_ACCEL;
+                // --- 1. 性格別ターゲット座標の設定 ---
+                let targetX = player.x;
+                let targetY = player.y;
+
+                if (e.personality === 'RAMMER') {
+                    // とにかくプレイヤーに直行・体当たり
+                    targetX = player.x;
+                    targetY = player.y;
+                } else if (e.personality === 'SNIPER') {
+                    // 一定の遠距離（約350px）を維持する
+                    const keepDist = 350;
+                    if (distToPlayer < keepDist - 50) {
+                        // 近すぎるので離れる方向へ加速
+                        targetX = e.x - (edx / distToPlayer) * 200;
+                        targetY = e.y - (edy / distToPlayer) * 200;
+                    } else if (distToPlayer > keepDist + 50) {
+                        // 遠すぎるので近づく
+                        targetX = player.x;
+                        targetY = player.y;
+                    } else {
+                        // 距離がちょうどいい時はプレイヤーの周りを周回移動（横滑り）
+                        targetX = player.x + (edy / distToPlayer) * keepDist;
+                        targetY = player.y - (edx / distToPlayer) * keepDist;
+                    }
+                } else if (e.personality === 'DOGFIGHTER') {
+                    // すれ違いドッグファイト
+                    // ターゲット位置をプレイヤーから一定オフセットさせ、定期的に更新する
+                    if (!e.dogfightTimer || e.dogfightTimer <= 0 || distToPlayer < 100) {
+                        const offsetAngle = Math.random() * Math.PI * 2;
+                        const offsetDist = 120 + Math.random() * 120; // プレイヤーの周囲120〜240px
+                        e.offsetX = Math.cos(offsetAngle) * offsetDist;
+                        e.offsetY = Math.sin(offsetAngle) * offsetDist;
+                        e.dogfightTimer = 100 + Math.floor(Math.random() * 60); // 定期的に次の通過ポイントを設定
+                    }
+                    e.dogfightTimer--;
+
+                    targetX = player.x + e.offsetX;
+                    targetY = player.y + e.offsetY;
+                }
+
+                // --- 2. 進行方向の障害物（他の敵・プレイヤー・有害デブリ・爆発）の回避 (Obstacle Avoidance) ---
+                let avoidX = 0;
+                let avoidY = 0;
+                const eSpeed = Math.hypot(e.vx, e.vy);
+                const accel = e.personality === 'RAMMER' ? CONFIG.ENEMY_ACCEL * 1.3 : CONFIG.ENEMY_ACCEL;
+                
+                if (eSpeed > 0.2) {
+                    const dirX = e.vx / eSpeed;
+                    const dirY = e.vy / eSpeed;
+                    const lookAheadDist = CONFIG.ENEMY_SIZE_W * 2.8; // 約84px先を予測
+                    const predictX = e.x + dirX * lookAheadDist;
+                    const predictY = e.y + dirY * lookAheadDist;
+
+                    let mostThreatening = null;
+                    let minThreatDist = lookAheadDist;
+
+                    // プレイヤーを障害物として検知 (自爆型RAMMERはプレイヤーを避けない)
+                    if (!GAME.isPlayerDying && e.personality !== 'RAMMER') {
+                        const distToPlayer = Math.hypot(player.x - predictX, player.y - predictY);
+                        if (distToPlayer < CONFIG.ENEMY_SIZE_W * 1.5) {
+                            mostThreatening = player;
+                            minThreatDist = distToPlayer;
+                        }
+                    }
+
+                    // 他の敵機を障害物として検知
+                    entities.enemies.forEach(other => {
+                        if (other === e) return;
+                        const distToOther = Math.hypot(other.x - predictX, other.y - predictY);
+                        if (distToOther < CONFIG.ENEMY_SIZE_W * 1.3) {
+                            if (distToOther < minThreatDist) {
+                                mostThreatening = other;
+                                minThreatDist = distToOther;
+                            }
+                        }
+                    });
+
+                    // 有害デブリを障害物として検知
+                    entities.debris.forEach(d => {
+                        if (!d.harmful) return; // 無害な被弾火花は避けない
+                        const distToDebris = Math.hypot(d.x - predictX, d.y - predictY);
+                        if (distToDebris < d.size / 2 + CONFIG.ENEMY_SIZE_W * 1.3) {
+                            if (distToDebris < minThreatDist) {
+                                mostThreatening = d;
+                                minThreatDist = distToDebris;
+                            }
+                        }
+                    });
+
+                    // 爆発を危険オブジェとして検知
+                    entities.explosions.forEach(exp => {
+                        const distToExplosion = Math.hypot(exp.x - predictX, exp.y - predictY);
+                        // 爆発の現在半径を取得（事前にupdate計算済みのcurrentScaleを利用）
+                        const currentRadius = exp.maxRadius * (exp.currentScale || 1.0);
+                        
+                        if (distToExplosion < currentRadius + CONFIG.ENEMY_SIZE_W * 1.5) {
+                            // 爆発は他より脅威度が高い（距離を小さく見積もり、優先的に回避させる）
+                            const effectiveDist = distToExplosion * 0.4;
+                            if (effectiveDist < minThreatDist) {
+                                mostThreatening = exp;
+                                minThreatDist = effectiveDist;
+                            }
+                        }
+                    });
+
+                    // 回避ステアリング力の計算
+                    if (mostThreatening) {
+                        const relX = mostThreatening.x - e.x;
+                        const relY = mostThreatening.y - e.y;
+                        const crossProduct = dirX * relY - dirY * relX;
+
+                        // 左右に避ける直交ベクトルを生成 (外積の符号と逆向きに操舵)
+                        const steerSide = crossProduct > 0 ? -1 : 1;
+                        const steerX = -dirY * steerSide;
+                        const steerY = dirX * steerSide;
+
+                        // 障害物に近づくほど強い回避力を適用
+                        const avoidForce = (1.0 - minThreatDist / lookAheadDist) * accel * 2.5;
+                        avoidX = steerX * avoidForce;
+                        avoidY = steerY * avoidForce;
+                    }
+                }
+
+                // --- 3. 移動角度と慣性移動 ---
+                const moveAngle = Math.atan2(targetY - e.y, targetX - e.x);
+
+                let maxSpd = CONFIG.ENEMY_MAX_SPEED;
+                if (e.personality === 'RAMMER') maxSpd *= 1.25;
+                if (e.personality === 'SNIPER') maxSpd *= 0.85;
+
+                e.vx += Math.cos(moveAngle) * accel + avoidX;
+                e.vy += Math.sin(moveAngle) * accel + avoidY;
 
                 e.vx *= CONFIG.FRICTION;
                 e.vy *= CONFIG.FRICTION;
 
                 const enemySpeed = Math.hypot(e.vx, e.vy);
-                if (enemySpeed > CONFIG.ENEMY_MAX_SPEED) {
-                    e.vx = (e.vx / enemySpeed) * CONFIG.ENEMY_MAX_SPEED;
-                    e.vy = (e.vy / enemySpeed) * CONFIG.ENEMY_MAX_SPEED;
+                if (enemySpeed > maxSpd) {
+                    e.vx = (e.vx / enemySpeed) * maxSpd;
+                    e.vy = (e.vy / enemySpeed) * maxSpd;
                 }
 
                 e.x += e.vx;
                 e.y += e.vy;
+
+                // --- 3. 機体の向き（エイム）と揺らぎの適用 ---
+                // 照準角度に数秒ごとに変わる微小な揺らぎ（aimOffset）を加え、射撃が単一線上に重ならないようにする
+                if (!e.aimOffsetTimer || e.aimOffsetTimer <= 0) {
+                    e.aimOffset = (Math.random() - 0.5) * 0.35; // 約±10度以内の揺らぎ
+                    e.aimOffsetTimer = 30 + Math.floor(Math.random() * 45);
+                }
+                e.aimOffsetTimer--;
+
+                e.angle = Math.atan2(edy, edx) + e.aimOffset;
 
                 // 敵のスラスターパーティクル (プレイヤーより控えめに発生)
                 if (Math.random() < 0.3) {
@@ -639,9 +1142,7 @@
                     });
                 }
 
-                // 敵の射撃と個体ごとのヒート管理
-                const distToPlayer = Math.hypot(edx, edy);
-
+                // --- 4. 射撃処理とヒートゲージ管理（揺らぎを持たせる） ---
                 if (e.isOverheated) {
                     e.overheatTimer--;
                     e.heat -= (CONFIG.HEAT_MAX / CONFIG.HEAT_OVERHEAT_PENALTY);
@@ -650,12 +1151,16 @@
                         e.isOverheated = false;
                     }
                 } else {
-                    // プレイヤーが射程内にいる場合のみ射撃
-                    if (distToPlayer < 800) {
+                    // プレイヤーが生きており、かつ射程内にいる場合のみ射撃
+                    if (!GAME.isPlayerDying && distToPlayer < 800) {
                         e.fireTimer++;
-                        if (e.fireTimer >= CONFIG.ENEMY_FIRE_RATE) {
+                        // 揺らいだ射撃間隔(nextShootInterval)に達したか判定
+                        if (e.fireTimer >= e.nextShootInterval) {
                             e.fireTimer = 0;
                             e.heat += CONFIG.HEAT_PER_SHOT;
+
+                            // 次回の射撃間隔をランダムに揺らす（ENEMY_FIRE_RATEの75%〜125%）
+                            e.nextShootInterval = CONFIG.ENEMY_FIRE_RATE * (0.75 + Math.random() * 0.5);
 
                             if (e.heat >= CONFIG.HEAT_MAX) {
                                 e.heat = CONFIG.HEAT_MAX;
@@ -663,7 +1168,7 @@
                                 e.overheatTimer = CONFIG.HEAT_OVERHEAT_PENALTY;
                             }
 
-                            // 敵の弾を発射（慣性を継承）
+                            // 敵の弾を発射（照準の揺らぎを反映したe.angleを使用）
                             entities.enemyBullets.push({
                                 x: e.x + Math.cos(e.angle) * (CONFIG.ENEMY_SIZE_W / 2),
                                 y: e.y + Math.sin(e.angle) * (CONFIG.ENEMY_SIZE_W / 2),
@@ -689,9 +1194,19 @@
 
                         // 攻撃ヒット演出（白フラッシュ＆破片）
                         e.flashTimer = CONFIG.FLASH_DURATION;
-                        spawnDebris(e.x, e.y, '#f00', 3 + Math.floor(Math.random() * 2), Math.max(2, CONFIG.ENEMY_SIZE_W / 8));
+                        
+                        // 敵の性格色に合わせたデブリを生成
+                        let enemyColor = CONFIG.COLOR_ENEMY_DOGFIGHTER;
+                        if (e.personality === 'RAMMER') enemyColor = CONFIG.COLOR_ENEMY_RAMMER;
+                        if (e.personality === 'SNIPER') enemyColor = CONFIG.COLOR_ENEMY_SNIPER;
+                        
+                        spawnDebris(e.x, e.y, enemyColor, 3 + Math.floor(Math.random() * 2));
 
                         if (e.hp <= 0) {
+                            // 敵撃破時の爆発と有害破片の発生
+                            spawnExplosion(e.x, e.y);
+                            spawnDeathDebris(e.x, e.y, enemyColor, e.vx, e.vy);
+
                             entities.gems.push({ x: e.x, y: e.y, exp: CONFIG.GEM_BASE_EXP, locked: false, speed: CONFIG.GEM_MAGNET_BASE_SPEED });
                             entities.enemies.splice(i, 1);
                             hit = true;
@@ -701,19 +1216,62 @@
                 }
                 if (hit) continue;
 
-                // 敵機本体と自機の衝突判定
-                if (Math.hypot(e.x - player.x, e.y - player.y) < CONFIG.COLLISION_ENEMY_PLAYER) {
-                    playerStats.hp -= CONFIG.ENEMY_DAMAGE;
-                    entities.enemies.splice(i, 1); // 自爆扱い
+                // 敵機本体と自機の物理衝突判定
+                if (!GAME.isPlayerDying) {
+                    const dx = e.x - player.x;
+                    const dy = e.y - player.y;
+                    const dist = Math.hypot(dx, dy);
+                    const minDist = CONFIG.COLLISION_ENEMY_PLAYER; // 20px
+                    if (dist < minDist) {
+                        // 重なり解消
+                        const overlap = minDist - dist;
+                        const nx = dx / (dist || 1);
+                        const ny = dy / (dist || 1);
+                        
+                        // 自機と敵機を押し離す
+                        player.x -= nx * overlap * 0.5;
+                        player.y -= ny * overlap * 0.5;
+                        e.x += nx * overlap * 0.5;
+                        e.y += ny * overlap * 0.5;
 
-                    // 被弾演出（赤フラッシュ＆破片）
-                    GAME.damageFlashTimer = CONFIG.FLASH_DURATION;
-                    spawnDebris(player.x, player.y, '#0f0', 3 + Math.floor(Math.random() * 2), Math.max(2, CONFIG.PLAYER_SIZE_W / 8));
+                        // 相対速度による反動
+                        const rvx = e.vx - player.vx;
+                        const rvy = e.vy - player.vy;
+                        const velAlongNormal = rvx * nx + rvy * ny;
 
-                    if (playerStats.hp <= 0) {
-                        GAME.state = 'GAMEOVER';
-                        document.getElementById('game-over-screen').style.display = 'block';
+                        if (velAlongNormal < 0) {
+                            const crashSpeed = Math.hypot(rvx, rvy); // 相対速度の大きさ
+                            const restitution = CONFIG.COLLISION_RECOIL_RESTITUTION;
+                            const impulse = (1 + restitution) * crashSpeed * 0.5 + 2.0; // 自機衝突はより強い反動に
+
+                            player.vx -= impulse * nx;
+                            player.vy -= impulse * ny;
+                            e.vx += impulse * nx;
+                            e.vy += impulse * ny;
+
+                            // ダメージ計算（相対速度比例）
+                            const damage = CONFIG.COLLISION_DAMAGE_BASE + crashSpeed * CONFIG.COLLISION_DAMAGE_VEL_MULT;
+                            playerStats.hp -= damage;
+                            e.hp -= damage;
+
+                            GAME.damageFlashTimer = CONFIG.FLASH_DURATION;
+                            e.flashTimer = CONFIG.FLASH_DURATION;
+
+                            let enemyColor = getEnemyColor(e);
+                            spawnDebris((player.x + e.x) / 2, (player.y + e.y) / 2, '#0f0', 3);
+                            spawnDebris((player.x + e.x) / 2, (player.y + e.y) / 2, enemyColor, 3);
+                        }
                     }
+                }
+
+                // 生存チェック（衝突等でHPが0になった場合の一括処理）
+                if (e.hp <= 0) {
+                    let enemyColor = getEnemyColor(e);
+                    spawnExplosion(e.x, e.y);
+                    spawnDeathDebris(e.x, e.y, enemyColor, e.vx, e.vy);
+                    entities.gems.push({ x: e.x, y: e.y, exp: CONFIG.GEM_BASE_EXP, locked: false, speed: CONFIG.GEM_MAGNET_BASE_SPEED });
+                    entities.enemies.splice(i, 1);
+                    continue;
                 }
             }
 
@@ -740,6 +1298,11 @@
                     entities.gems.splice(i, 1);
                     checkLevelUp();
                 }
+            }
+
+            // 万が一の自機HPゼロ判定のセーフガード
+            if (playerStats.hp <= 0 && !GAME.isPlayerDying) {
+                triggerPlayerDeath();
             }
 
             updateHUD();
@@ -815,15 +1378,19 @@
                 ctx.save();
                 ctx.translate(p.x, p.y);
                 ctx.scale(scale, scale);
-                ctx.drawImage(SpriteCache.particle, -SpriteCache.particle.width / 2, -SpriteCache.particle.height / 2);
+                if (p.type === 'DEBRIS_SMOKE') {
+                    ctx.drawImage(SpriteCache.debrisSmoke, -SpriteCache.debrisSmoke.width / 2, -SpriteCache.debrisSmoke.height / 2);
+                } else {
+                    ctx.drawImage(SpriteCache.particle, -SpriteCache.particle.width / 2, -SpriteCache.particle.height / 2);
+                }
                 ctx.restore();
             });
             ctx.globalAlpha = 1.0;
 
-            // デブリ（破片）の描画
+            // デブリ（破片）の描画（最後の30%でフェードアウト）
             entities.debris.forEach(d => {
                 ctx.fillStyle = d.color;
-                ctx.globalAlpha = d.life;
+                ctx.globalAlpha = Math.min(1.0, d.life / 0.3);
                 ctx.fillRect(d.x - d.size / 2, d.y - d.size / 2, d.size, d.size);
             });
             ctx.globalAlpha = 1.0;
@@ -843,7 +1410,7 @@
                 ctx.save();
                 ctx.translate(e.x, e.y);
 
-                // 敵のヒートゲージ (機体の下に回転せず描画)
+                // 敵のヒートゲージ (機体の下に回転せず描画 - 全て共通のオレンジ)
                 if (e.heat > 0) {
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
                     ctx.fillRect(-15, 22, 30, 3);
@@ -852,7 +1419,13 @@
                 }
 
                 ctx.rotate(e.angle);
-                ctx.drawImage(SpriteCache.enemy, -SpriteCache.enemy.width / 2, -SpriteCache.enemy.height / 2);
+                
+                // 性格に応じたプリレンダースプライトを選択
+                let sprite = SpriteCache.enemyDogfighter;
+                if (e.personality === 'RAMMER') sprite = SpriteCache.enemyRammer;
+                if (e.personality === 'SNIPER') sprite = SpriteCache.enemySniper;
+
+                ctx.drawImage(sprite, -sprite.width / 2, -sprite.height / 2);
 
                 // 攻撃ヒット時の白フラッシュ
                 if (e.flashTimer > 0) {
@@ -863,60 +1436,158 @@
                 ctx.restore();
             });
 
-            // 自機描画
-            ctx.save();
-            ctx.translate(player.x, player.y);
-            ctx.rotate(player.angle);
-            ctx.drawImage(SpriteCache.player, -SpriteCache.player.width / 2, -SpriteCache.player.height / 2);
-            ctx.restore();
+            // 自機描画とマイクロHUD (生存時のみ)
+            if (!GAME.isPlayerDying) {
+                // 自機描画
+                ctx.save();
+                ctx.translate(player.x, player.y);
+                ctx.rotate(player.angle);
+                ctx.drawImage(SpriteCache.player, -SpriteCache.player.width / 2, -SpriteCache.player.height / 2);
+                ctx.restore();
 
-            // ----------------------------------------
-            // 自機追従マイクロHUDの描画 (Z-order最前面扱い)
-            // ----------------------------------------
-            ctx.save();
-            ctx.translate(player.x, player.y);
-            const hudRadius = 45;
-            ctx.lineWidth = 4;
+                // ----------------------------------------
+                // 自機追従マイクロHUDの描画 (Z-order最前面扱い)
+                // ----------------------------------------
+                ctx.save();
+                ctx.translate(player.x, player.y);
+                const hudRadius = 45;
+                ctx.lineWidth = 4;
 
-            // HPゲージ（左側：下から上へ充填）
-            ctx.beginPath();
-            ctx.arc(0, 0, hudRadius, 0.7 * Math.PI, 1.3 * Math.PI);
-            ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
-            ctx.stroke();
-
-            const hpRatio = Math.max(0, playerStats.hp / playerStats.maxHp);
-            if (hpRatio > 0) {
+                // HPゲージ（左側：下から上へ充填）
                 ctx.beginPath();
-                // 1.3*PI (下) から上へ向かって描画するため、反時計回り(true)を指定
-                ctx.arc(0, 0, hudRadius, 1.3 * Math.PI, 1.3 * Math.PI - (0.6 * Math.PI * hpRatio), true);
-                ctx.strokeStyle = hpRatio > 0.5 ? '#0f0' : hpRatio > 0.25 ? '#ff0' : '#f00';
+                ctx.arc(0, 0, hudRadius, 0.7 * Math.PI, 1.3 * Math.PI);
+                ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
                 ctx.stroke();
-            }
 
-            // ヒートゲージ（右側：下から上へ充填）
-            ctx.beginPath();
-            ctx.arc(0, 0, hudRadius, -0.3 * Math.PI, 0.3 * Math.PI);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-            ctx.stroke();
-
-            const heatRatio = Math.max(0, Math.min(1, playerStats.heat / CONFIG.HEAT_MAX));
-            if (heatRatio > 0) {
-                ctx.beginPath();
-                // 0.3*PI (下) から上へ向かって描画するため、反時計回り(true)を指定
-                ctx.arc(0, 0, hudRadius, 0.3 * Math.PI, 0.3 * Math.PI - (0.6 * Math.PI * heatRatio), true);
-
-                if (player.isOverheated) {
-                    ctx.strokeStyle = '#808080'; // オーバーヒート時はグレー
-                } else if (heatRatio > 0.8) {
-                    ctx.strokeStyle = '#f80';    // 危険域はオレンジ
-                } else {
-                    ctx.strokeStyle = '#fff';    // 通常時は白
+                const hpRatio = Math.max(0, playerStats.hp / playerStats.maxHp);
+                if (hpRatio > 0) {
+                    ctx.beginPath();
+                    // 1.3*PI (下) から上へ向かって描画するため、反時計回り(true)を指定
+                    ctx.arc(0, 0, hudRadius, 1.3 * Math.PI, 1.3 * Math.PI - (0.6 * Math.PI * hpRatio), true);
+                    ctx.strokeStyle = hpRatio > 0.5 ? '#0f0' : hpRatio > 0.25 ? '#ff0' : '#f00';
+                    ctx.stroke();
                 }
+
+                // ヒートゲージ（右側：下から上へ充填）
+                ctx.beginPath();
+                ctx.arc(0, 0, hudRadius, -0.3 * Math.PI, 0.3 * Math.PI);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
                 ctx.stroke();
+
+                const heatRatio = Math.max(0, Math.min(1, playerStats.heat / CONFIG.HEAT_MAX));
+                if (heatRatio > 0) {
+                    ctx.beginPath();
+                    // 0.3*PI (下) から上へ向かって描画するため、反時計回り(true)を指定
+                    ctx.arc(0, 0, hudRadius, 0.3 * Math.PI, 0.3 * Math.PI - (0.6 * Math.PI * heatRatio), true);
+
+                    if (player.isOverheated) {
+                        ctx.strokeStyle = '#808080'; // オーバーヒート時はグレー
+                    } else if (heatRatio > 0.8) {
+                        ctx.strokeStyle = '#f80';    // 危険域はオレンジ
+                    } else {
+                        ctx.strokeStyle = '#fff';    // 通常時は白
+                    }
+                    ctx.stroke();
+                }
+                ctx.restore();
             }
-            ctx.restore();
+
+            // 爆発の描画 (3つの重ね合わせたサークルで拡大→維持＋振動→縮小)
+            entities.explosions.forEach(exp => {
+                const scale = exp.currentScale;
+                const currentRadius = exp.maxRadius * scale;
+
+                ctx.save();
+                
+                // 最後の10%でフェードアウト
+                const progress = 1 - (exp.timer / exp.maxTimer);
+                if (progress > 0.9) {
+                    ctx.globalAlpha = Math.max(0, (1.0 - progress) / 0.1);
+                } else {
+                    ctx.globalAlpha = 1.0;
+                }
+
+                // 振動オフセットを適用
+                const drawX = exp.x + (exp.shakeX || 0);
+                const drawY = exp.y + (exp.shakeY || 0);
+
+                // 円1 (赤/深紅 - やや大きめ、少しズレ)
+                ctx.beginPath();
+                ctx.arc(drawX - 4 * scale, drawY - 3 * scale, currentRadius, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 30, 0, 0.7)';
+                ctx.fill();
+
+                // 円2 (白 - 少し小さめ、ズレ)
+                ctx.beginPath();
+                ctx.arc(drawX + 3 * scale, drawY + 3 * scale, currentRadius * 0.75, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.fill();
+
+                // 円3 (黄色/オレンジ - 反対方向にズレ)
+                ctx.beginPath();
+                ctx.arc(drawX - 2 * scale, drawY + 5 * scale, currentRadius * 0.5, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 160, 0, 0.8)';
+                ctx.fill();
+
+                ctx.restore();
+            });
 
             ctx.restore(); // カメラ適用終了
+
+            // ----------------------------------------
+            // 画面外エネミーの方向マーカー描画
+            // ----------------------------------------
+            entities.enemies.forEach(e => {
+                const dx = e.x - player.x;
+                const dy = e.y - player.y;
+                const margin = 25; // 画面端からのマージン
+                const halfW = GAME.width / 2 - margin;
+                const halfH = GAME.height / 2 - margin;
+
+                if (Math.abs(dx) > halfW || Math.abs(dy) > halfH) {
+                    let drawX = 0;
+                    let drawY = 0;
+                    
+                    // 画面の矩形境界との交点を求める
+                    if (Math.abs(dx * halfH) > Math.abs(dy * halfW)) {
+                        // 左右の端に交差
+                        drawX = dx > 0 ? halfW : -halfW;
+                        drawY = drawX * (dy / dx);
+                    } else {
+                        // 上下の端に交差
+                        drawY = dy > 0 ? halfH : -halfH;
+                        drawX = drawY * (dx / dy);
+                    }
+
+                    const screenX = GAME.width / 2 + drawX;
+                    const screenY = GAME.height / 2 + drawY;
+                    const angle = Math.atan2(dy, dx);
+
+                    ctx.save();
+                    ctx.translate(screenX, screenY);
+                    ctx.rotate(angle + Math.PI / 2); // ▲の頂点が敵の方向を向くように回転
+
+                    ctx.fillStyle = 'rgba(255, 50, 50, 0.8)';
+                    ctx.strokeStyle = 'rgba(255, 50, 50, 0.8)';
+                    
+                    // 赤い▲
+                    ctx.beginPath();
+                    ctx.moveTo(0, -12); // 先端
+                    ctx.lineTo(-8, 4);  // 左下
+                    ctx.lineTo(8, 4);   // 右下
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // 下部の線（天地を示す ＿）
+                    ctx.beginPath();
+                    ctx.moveTo(-10, 8);
+                    ctx.lineTo(10, 8);
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    ctx.restore();
+                }
+            });
 
             // ----------------------------------------
             // 被弾時の画面全体赤フラッシュ演出
