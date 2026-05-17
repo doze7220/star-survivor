@@ -142,6 +142,88 @@
             background: #f00;
             color: #000;
         }
+
+        /* Cielo Communication */
+        #cielo-comm {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #0f0;
+            font-size: 18px;
+            font-weight: bold;
+            font-family: monospace;
+            text-shadow: 1px 1px 2px #000;
+            text-align: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        /* Credits (Bounty) */
+        #credits-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ffaa00;
+            font-size: 1.2rem;
+            font-weight: bold;
+            font-family: 'Courier New', Courier, monospace;
+            text-shadow: 1px 1px 2px #000;
+            pointer-events: none;
+        }
+
+        /* Stats Panel (右下UI) */
+        #stats-panel {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 0.75rem;
+            color: #aaa;
+            text-shadow: 1px 1px 2px #000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .stat-category {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            background: linear-gradient(to left, rgba(0, 50, 100, 0.4), transparent);
+            padding: 5px 15px;
+            border-right: 2px solid #0ff;
+        }
+
+        .stat-category-title {
+            color: #0ff;
+            font-weight: bold;
+            font-size: 0.85rem;
+            margin-bottom: 2px;
+            text-align: right;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .stat-label {
+            color: #888;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .stat-value {
+            color: #fff;
+            min-width: 80px;
+            text-align: right;
+            font-weight: bold;
+            font-family: 'Courier New', Courier, monospace;
+        }
     </style>
 </head>
 
@@ -149,11 +231,15 @@
 
     <canvas id="gameCanvas"></canvas>
     <div id="ui-layer">
+        <div id="credits-panel">BOUNTY: <span id="ui-credits">0</span> c</div>
+        <div id="cielo-comm"></div>
         <div id="hud">
             <div>LEVEL: <span id="ui-level">1</span></div>
             <div>EXP: <span id="ui-exp">0</span> / <span id="ui-next-exp">100</span></div>
             <div>HP: <span id="ui-hp">100</span></div>
         </div>
+
+        <div id="stats-panel"></div>
 
         <div id="level-up-screen">
             <h2>LEVEL UP!</h2>
@@ -226,7 +312,19 @@
             // 【経験値ジェム・成長システム設定】
             GEM_SIZE: 12,                 // 経験値ジェムのサイズ
             GEM_BASE_EXP: 20,             // ジェム1個あたりから獲得できる基本経験値量
-            GEM_MAGNET_RADIUS: 150,       // 経験値ジェムを引き寄せる磁石（吸引）の半径（ピクセル）
+            EXP_MAGNET_RADIUS: 150,       // 経験値を引き寄せる半径
+            
+            // --- α2追加仕様 ---
+            MOTHERSHIP_X: 0,
+            MOTHERSHIP_Y: 0,
+            SPAWN_X: -500,
+            SPAWN_Y: -1500,
+            SPAWN_TRIGGER_Y: -500,
+            MISSION_QUOTA: 10,
+            BOOSTER_COOLDOWN: 180, // 3秒(60fps)
+            MISSILE_COOLDOWN: 60,  // 1秒
+            MISSILE_SPEED: 8,
+            MISSILE_TURN_RATE: 0.1,
             GEM_MAGNET_BASE_SPEED: 8.0,   // ジェムがプレイヤーに吸引される時の初速
             GEM_MAGNET_ACCEL: 0.5,        // ジェムの毎フレームの吸引加速度（逃さず必ず回収するため）
             GEM_COLLECT_RADIUS: 20,       // ジェムを回収・獲得する自機との判定半径（ピクセル）
@@ -270,9 +368,14 @@
                 { rate: 0.5, size: 2, count: 100 }, // 中景レイヤー
                 { rate: 0.8, size: 3, count: 50 }   // 近景レイヤー
             ],
-            PARTICLE_SIZE: 6,             // スラスターから出るパーティクルの初期サイズ（半径）
+            PARTICLE_SIZE: 3,             // スラスターから出るパーティクルの初期サイズ（半径）
             PARTICLE_DECAY: 0.008,        // パーティクルの毎フレームのフェードアウト速度（小さくすると長持ち）
             PARTICLE_VEL_MULT: 0.5,       // パーティクル生成時にプレイヤーの慣性速度を引き継ぐ割合（0.5 = 50%）
+            PARTICLE_SPEED: 2.0,          // スラスター噴射炎の射出速度
+            PARTICLE_SPREAD: 0.0,         // スラスター噴射炎のランダム拡散度（0で直進）
+            COLOR_PARTICLE_PLAYER: '#fff',// 自機のスラスター噴射炎の色
+            COLOR_PARTICLE_ENEMY: '#888', // 敵機のスラスター噴射炎の色
+            RADAR_RADIUS: 200,            // 真円レーダーゲージの半径（ピクセル）
         };
 
         // ==========================================
@@ -286,7 +389,8 @@
             enemyFlash: null,
             bullet: null,
             enemyBullet: null,
-            particle: null,
+            particlePlayer: null,
+            particleEnemy: null,
             gem: null,
             debrisSmoke: null, // デブリの煙用キャッシュ
 
@@ -298,7 +402,8 @@
                 this.enemyFlash = this.createShip('#fff', CONFIG.ENEMY_SIZE_W, CONFIG.ENEMY_SIZE_H, true); // 白のフラッシュ用敵機
                 this.bullet = this.createCircle('#ff0', CONFIG.BULLET_SIZE);     // 黄色の自機ショット
                 this.enemyBullet = this.createCircle('#f00', CONFIG.BULLET_SIZE); // 赤色の敵機ショット
-                this.particle = this.createCircle('#f80', CONFIG.PARTICLE_SIZE);   // オレンジのパーティクル
+                this.particlePlayer = this.createCircle(CONFIG.COLOR_PARTICLE_PLAYER, CONFIG.PARTICLE_SIZE);
+                this.particleEnemy = this.createCircle(CONFIG.COLOR_PARTICLE_ENEMY, CONFIG.PARTICLE_SIZE);
                 this.gem = this.createDiamond('#0ff', CONFIG.GEM_SIZE);      // シアンの経験値ジェム
                 this.debrisSmoke = this.createCircle(CONFIG.DEBRIS_SMOKE_COLOR, CONFIG.DEBRIS_SMOKE_SIZE); // デブリの煙
             },
@@ -353,14 +458,56 @@
         };
 
         // ==========================================
+        // 1.5 Cielo 通信システム
+        // ==========================================
+        const Cielo = {
+            element: null,
+            queue: [],
+            isPlaying: false,
+            init: function() {
+                this.element = document.getElementById('cielo-comm');
+            },
+            play: function(msg) {
+                this.queue.push(msg);
+                if (!this.isPlaying) {
+                    this.next();
+                }
+            },
+            next: function() {
+                if (this.queue.length === 0) {
+                    this.isPlaying = false;
+                    this.element.style.opacity = 0;
+                    return;
+                }
+                this.isPlaying = true;
+                const msg = this.queue.shift();
+                this.element.innerText = `＝　${msg}　＝`;
+                this.element.style.opacity = 1;
+                // 表示時間は文字数 x 1秒 (ただし最大5秒、最小2秒にクリップ)
+                const duration = Math.max(2000, Math.min(5000, msg.length * 1000));
+                setTimeout(() => {
+                    this.element.style.opacity = 0;
+                    setTimeout(() => this.next(), 300); // メッセージ間の余白
+                }, duration);
+            }
+        };
+
+        // ==========================================
         // 2. ゲーム状態・エンティティ定義
         // ==========================================
         const GAME = {
             state: 'PLAYING', // PLAYING, PAUSED, GAMEOVER
             width: window.innerWidth,
             height: window.innerHeight,
+            mouseX: 0,
+            mouseY: 0,
+            isMouseDown: false, // 左クリック状態
+            isPlayerDying: false,
+            credits: 0,
+            displayCredits: 0,
+            killCount: 0,
+            isMissionClear: false,
             damageFlashTimer: 0, // 画面の赤フラッシュ用タイマー
-            isPlayerDying: false // 自機の爆破演出中かどうかのフラグ
         };
 
         const keys = {};
@@ -390,7 +537,12 @@
             maxSpeed: CONFIG.PLAYER_BASE_MAX_SPEED,
             hp: CONFIG.PLAYER_BASE_HP,
             maxHp: CONFIG.PLAYER_BASE_HP,
-            heat: 0 // 現在の熱量
+            heat: 0, // 現在の熱量
+            upgrades: {
+                fireRate: 1,
+                bulletCount: 1,
+                moveSpeed: 1
+            }
         };
 
         const upgradePool = [
@@ -398,13 +550,19 @@
                 id: 'fireRate',
                 name: 'Rapid Fire',
                 description: '連射速度がアップする',
-                apply: () => playerStats.fireRate = Math.max(CONFIG.UPGRADE_FIRERATE_MIN, Math.floor(playerStats.fireRate * CONFIG.UPGRADE_FIRERATE_MULT))
+                apply: () => {
+                    playerStats.fireRate = Math.max(CONFIG.UPGRADE_FIRERATE_MIN, Math.floor(playerStats.fireRate * CONFIG.UPGRADE_FIRERATE_MULT));
+                    playerStats.upgrades.fireRate++;
+                }
             },
             {
                 id: 'bulletCount',
                 name: 'Multi-Shot',
                 description: '同時発射弾数が増える',
-                apply: () => playerStats.bulletCount++
+                apply: () => {
+                    playerStats.bulletCount++;
+                    playerStats.upgrades.bulletCount++;
+                }
             },
             {
                 id: 'moveSpeed',
@@ -413,6 +571,7 @@
                 apply: () => {
                     playerStats.moveSpeed += CONFIG.UPGRADE_MOVESPEED_ADD;
                     playerStats.maxSpeed += CONFIG.UPGRADE_MAXSPEED_ADD;
+                    playerStats.upgrades.moveSpeed++;
                 }
             },
             {
@@ -424,13 +583,26 @@
         ];
 
         const player = {
-            x: 0, y: 0, vx: 0, vy: 0, angle: 0, fireTimer: 0,
+            x: 0, y: 0, vx: 0, vy: 0,
+            bodyAngle: -Math.PI / 2, // 機体の向いている方向
+            turretAngle: -Math.PI / 2, // 砲塔の向いている方向
+            flashTimer: 0, // ダメージ時の白点滅用タイマー
+            isInvincible: false, // 無敵状態フラグ
+            invincibleTimer: 0,
             isOverheated: false,
-            overheatTimer: 0
+            overheatTimer: 0,
+            missileCooldown: 0,
+            boosterCooldown: 0,
         };
 
         const entities = {
-            bullets: [], enemyBullets: [], enemies: [], particles: [], gems: [], debris: [], explosions: []
+            enemies: [],
+            bullets: [],
+            enemyBullets: [],
+            particles: [], // スラスターの軌跡や爆発用
+            gems: [],      // 経験値ジェム
+            missiles: [],  // プレイヤーのミサイル
+            texts: []      // ダメージやレベルアップのポップアップテキスト
         };
 
         // Phase 3: 多重スクロール星背景 (Parallax Starfield)
@@ -524,14 +696,31 @@
             // --- Phase 2: 物理と操作 (Drift Physics) ---
             let ax = 0, ay = 0;
             if (!GAME.isPlayerDying) {
-                if (keys['KeyW'] || keys['ArrowUp']) ay -= playerStats.moveSpeed;
-                if (keys['KeyS'] || keys['ArrowDown']) ay += playerStats.moveSpeed;
-                if (keys['KeyA'] || keys['ArrowLeft']) ax -= playerStats.moveSpeed;
-                if (keys['KeyD'] || keys['ArrowRight']) ax += playerStats.moveSpeed;
+                if (keys['KeyW'] || keys['ArrowUp']) ay -= 1;
+                if (keys['KeyS'] || keys['ArrowDown']) ay += 1;
+                if (keys['KeyA'] || keys['ArrowLeft']) ax -= 1;
+                if (keys['KeyD'] || keys['ArrowRight']) ax += 1;
             }
 
-            player.vx += ax;
-            player.vy += ay;
+            // --- ブースター (SHIFT) ---
+            if (!GAME.isPlayerDying && (keys['ShiftLeft'] || keys['ShiftRight']) && player.boosterCooldown <= 0 && !player.isOverheated) {
+                player.boosterCooldown = CONFIG.BOOSTER_COOLDOWN;
+                const boostSpeed = 15;
+                const dot = player.vx * Math.cos(player.bodyAngle) + player.vy * Math.sin(player.bodyAngle);
+                const orthoX = player.vx - dot * Math.cos(player.bodyAngle);
+                const orthoY = player.vy - dot * Math.sin(player.bodyAngle);
+                player.vx = dot * Math.cos(player.bodyAngle) + orthoX * 0.4 + Math.cos(player.bodyAngle) * boostSpeed;
+                player.vy = dot * Math.sin(player.bodyAngle) + orthoY * 0.4 + Math.sin(player.bodyAngle) * boostSpeed;
+                playerStats.heat = Math.min(CONFIG.HEAT_MAX, playerStats.heat + 30); // ヒート増加
+                Cielo.play("ブースト全開ですね！");
+            }
+            if (player.boosterCooldown > 0) player.boosterCooldown--;
+
+            if (ax !== 0 || ay !== 0) {
+                player.bodyAngle = Math.atan2(ay, ax);
+                player.vx += Math.cos(player.bodyAngle) * playerStats.moveSpeed;
+                player.vy += Math.sin(player.bodyAngle) * playerStats.moveSpeed;
+            }
 
             // Friction (摩擦係数)
             player.vx *= CONFIG.FRICTION;
@@ -539,7 +728,7 @@
 
             // Math.hypot を用いた速度クランプ
             const speed = Math.hypot(player.vx, player.vy);
-            if (speed > playerStats.maxSpeed) {
+            if (speed > playerStats.maxSpeed && player.boosterCooldown < CONFIG.BOOSTER_COOLDOWN - 30) {
                 player.vx = (player.vx / speed) * playerStats.maxSpeed;
                 player.vy = (player.vy / speed) * playerStats.maxSpeed;
             }
@@ -558,24 +747,21 @@
                 }
             }
 
-            // 機体の回転 (敵がいれば敵の方向へ、いなければ進行方向やマウス方向へ)
-            if (nearestEnemy && minDist <= CONFIG.AUTO_AIM_RADIUS) {
-                player.angle = Math.atan2(nearestEnemy.y - player.y, nearestEnemy.x - player.x);
-            } else {
-                const dx = mouse.x - GAME.width / 2;
-                const dy = mouse.y - GAME.height / 2;
-                player.angle = Math.atan2(dy, dx);
-            }
+            // 機体の回転 (マウス方向へ砲塔を向ける)
+            const dxMouse = mouse.x - GAME.width / 2;
+            const dyMouse = mouse.y - GAME.height / 2;
+            player.turretAngle = Math.atan2(dyMouse, dxMouse);
 
             // --- Phase 3: スラスターパーティクル (慣性の継承と減衰) ---
             if (ax !== 0 || ay !== 0) {
-                const emitX = player.x - Math.cos(player.angle) * (CONFIG.PLAYER_SIZE_W / 2);
-                const emitY = player.y - Math.sin(player.angle) * (CONFIG.PLAYER_SIZE_W / 2);
+                const emitX = player.x - Math.cos(player.bodyAngle) * (CONFIG.PLAYER_SIZE_W / 2);
+                const emitY = player.y - Math.sin(player.bodyAngle) * (CONFIG.PLAYER_SIZE_W / 2);
                 entities.particles.push({
                     x: emitX, y: emitY,
-                    vx: player.vx * CONFIG.PARTICLE_VEL_MULT + (Math.random() - 0.5) * 2,
-                    vy: player.vy * CONFIG.PARTICLE_VEL_MULT + (Math.random() - 0.5) * 2,
-                    life: 1.0
+                    vx: player.vx * CONFIG.PARTICLE_VEL_MULT - Math.cos(player.bodyAngle) * CONFIG.PARTICLE_SPEED + (Math.random() - 0.5) * CONFIG.PARTICLE_SPREAD,
+                    vy: player.vy * CONFIG.PARTICLE_VEL_MULT - Math.sin(player.bodyAngle) * CONFIG.PARTICLE_SPEED + (Math.random() - 0.5) * CONFIG.PARTICLE_SPREAD,
+                    life: 1.0,
+                    type: 'PLAYER_THRUSTER'
                 });
             }
 
@@ -597,7 +783,7 @@
                 }
             }
 
-            if (isFiringInput && !player.isOverheated && nearestEnemy && minDist <= CONFIG.AUTO_AIM_RADIUS) {
+            if (isFiringInput && !player.isOverheated) {
                 player.fireTimer++;
                 if (player.fireTimer >= playerStats.fireRate) {
                     player.fireTimer = 0;
@@ -612,18 +798,58 @@
                     for (let i = 0; i < playerStats.bulletCount; i++) {
                         const spread = (i - (playerStats.bulletCount - 1) / 2) * CONFIG.BULLET_SPREAD_ANGLE;
                         entities.bullets.push({
-                            x: player.x + Math.cos(player.angle) * (CONFIG.PLAYER_SIZE_W / 2),
-                            y: player.y + Math.sin(player.angle) * (CONFIG.PLAYER_SIZE_W / 2),
-                            vx: Math.cos(player.angle + spread) * CONFIG.BULLET_SPEED + player.vx * 0.5,
-                            vy: Math.sin(player.angle + spread) * CONFIG.BULLET_SPEED + player.vy * 0.5,
+                            x: player.x + Math.cos(player.turretAngle) * (CONFIG.PLAYER_SIZE_W / 2),
+                            y: player.y + Math.sin(player.turretAngle) * (CONFIG.PLAYER_SIZE_W / 2),
+                            vx: Math.cos(player.turretAngle + spread) * CONFIG.BULLET_SPEED + player.vx * 0.5,
+                            vy: Math.sin(player.turretAngle + spread) * CONFIG.BULLET_SPEED + player.vy * 0.5,
                             life: CONFIG.BULLET_LIFE
                         });
                     }
                 }
-            } else if (!isFiringInput || !nearestEnemy) {
+            } else if (!isFiringInput) {
                 // 撃っていない間は次弾が即座に出るようにタイマーをリセットしておく
                 player.fireTimer = playerStats.fireRate;
             }
+
+            // --- ミサイル発射 (CTRL) ---
+            if (!GAME.isPlayerDying && (keys['ControlLeft'] || keys['ControlRight']) && player.missileCooldown <= 0 && !player.isOverheated) {
+                player.missileCooldown = CONFIG.MISSILE_COOLDOWN;
+                
+                // ロックオン処理 (前方90度)
+                let target = null;
+                let minDistToM = Infinity;
+                entities.enemies.forEach(e => {
+                    const dx = e.x - player.x;
+                    const dy = e.y - player.y;
+                    const dist = Math.hypot(dx, dy);
+                    const angleToEnemy = Math.atan2(dy, dx);
+                    // 角度差を計算
+                    let diff = Math.abs(angleToEnemy - player.turretAngle);
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    diff = Math.abs(diff);
+
+                    if (diff < Math.PI / 4 && dist < 1200) {
+                        if (dist < minDistToM) {
+                            minDistToM = dist;
+                            target = e;
+                        }
+                    }
+                });
+                
+                entities.missiles.push({
+                    x: player.x,
+                    y: player.y,
+                    vx: player.vx + Math.cos(player.turretAngle) * 5,
+                    vy: player.vy + Math.sin(player.turretAngle) * 5,
+                    angle: player.turretAngle,
+                    target: target,
+                    life: 300,
+                    speed: CONFIG.MISSILE_SPEED,
+                    turnRate: CONFIG.MISSILE_TURN_RATE
+                });
+                Cielo.play("ミサイル、いってらっしゃーい！");
+            }
+            if (player.missileCooldown > 0) player.missileCooldown--;
 
             // --- Phase 3: 多重スクロール背景座標更新 ---
             stars.forEach(s => {
@@ -658,8 +884,10 @@
                         vx: -d.vx * 0.15 + (Math.random() - 0.5) * 0.4,
                         vy: -d.vy * 0.15 + (Math.random() - 0.5) * 0.4,
                         life: 0.6,
+                        maxLife: 0.6, // 拡大フェードアウトの基準用
                         decay: CONFIG.DEBRIS_SMOKE_DECAY,
-                        type: 'DEBRIS_SMOKE'
+                        type: 'DEBRIS_SMOKE',
+                        baseSize: d.size * 1.5 // デブリサイズの1.5倍
                     });
                 }
 
@@ -881,11 +1109,75 @@
                 if (b.life <= 0) entities.enemyBullets.splice(i, 1);
             }
 
+            // --- ミサイル (Missiles) ---
+            for (let i = entities.missiles.length - 1; i >= 0; i--) {
+                let m = entities.missiles[i];
+                if (m.target && !m.target.hp) m.target = null;
+                if (m.target) {
+                    const tx = m.target.x - m.x;
+                    const ty = m.target.y - m.y;
+                    let targetAngle = Math.atan2(ty, tx);
+                    let diff = targetAngle - m.angle;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    m.angle += Math.sign(diff) * Math.min(Math.abs(diff), m.turnRate);
+                }
+                m.vx += Math.cos(m.angle) * 0.5;
+                m.vy += Math.sin(m.angle) * 0.5;
+                const speed = Math.hypot(m.vx, m.vy);
+                if (speed > m.speed) {
+                    m.vx = (m.vx / speed) * m.speed;
+                    m.vy = (m.vy / speed) * m.speed;
+                }
+                m.x += m.vx;
+                m.y += m.vy;
+                
+                // パーティクル
+                entities.particles.push({
+                    x: m.x - Math.cos(m.angle) * 5, y: m.y - Math.sin(m.angle) * 5,
+                    vx: m.vx * 0.5 + (Math.random()-0.5), vy: m.vy * 0.5 + (Math.random()-0.5),
+                    life: 0.8, type: 'PLAYER_THRUSTER'
+                });
+
+                // 敵との当たり判定
+                let hit = false;
+                for (let j = entities.enemies.length - 1; j >= 0; j--) {
+                    let e = entities.enemies[j];
+                    if (Math.hypot(e.x - m.x, e.y - m.y) < CONFIG.ENEMY_SIZE_W) {
+                        e.hp -= 30;
+                        e.flashTimer = CONFIG.FLASH_DURATION;
+                        spawnDebris(e.x, e.y, '#fff', 3);
+                        hit = true;
+                        break;
+                    }
+                }
+                m.life--;
+                if (hit || m.life <= 0) {
+                    spawnExplosion(m.x, m.y, true);
+                    entities.missiles.splice(i, 1);
+                }
+            }
+
             // --- Phase 4: 敵AIと衝突判定 ---
-            // 敵のスポーン（上限設定あり）
-            if (entities.enemies.length < CONFIG.ENEMY_MAX_COUNT && Math.random() < CONFIG.ENEMY_SPAWN_BASE_RATE + (playerStats.level * CONFIG.ENEMY_SPAWN_LEVEL_MULT)) {
+            // 敵のスポーン制御 (Y <= -500 でのみ湧く)
+            if (entities.enemies.length < CONFIG.ENEMY_MAX_COUNT && Math.random() < CONFIG.ENEMY_SPAWN_BASE_RATE + (playerStats.level * CONFIG.ENEMY_SPAWN_LEVEL_MULT) && player.y <= CONFIG.SPAWN_TRIGGER_Y) {
+                const spawnRadius = 300;
                 const angle = Math.random() * Math.PI * 2;
-                const dist = Math.max(GAME.width, GAME.height);
+                const dist = Math.random() * spawnRadius;
+                const spawnX = CONFIG.SPAWN_X + Math.cos(angle) * dist;
+                const spawnY = CONFIG.SPAWN_Y + Math.sin(angle) * dist;
+                
+                // 最初のスポーン時の通信
+                if (GAME.killCount === 0 && entities.enemies.length === 0) {
+                    const dx = spawnX - player.x;
+                    const dy = spawnY - player.y;
+                    let clockAngle = Math.atan2(dy, dx) - player.bodyAngle;
+                    while (clockAngle < -Math.PI) clockAngle += Math.PI * 2;
+                    while (clockAngle > Math.PI) clockAngle -= Math.PI * 2;
+                    let oclock = Math.round((clockAngle + Math.PI/2) / (Math.PI/6));
+                    if (oclock <= 0) oclock += 12;
+                    Cielo.play(`${oclock}時にターゲット発見ですー！`);
+                }
 
                 // 性格の決定（CONFIGの設定確率に基づく）
                 const totalChance = CONFIG.ENEMY_CHANCE_RAMMER + CONFIG.ENEMY_CHANCE_SNIPER + CONFIG.ENEMY_CHANCE_DOGFIGHTER;
@@ -899,11 +1191,13 @@
                     personality = 'DOGFIGHTER';
                 }
 
+                const enemyMaxHp = CONFIG.ENEMY_BASE_HP + playerStats.level * CONFIG.ENEMY_HP_LEVEL_MULT;
                 entities.enemies.push({
-                    x: player.x + Math.cos(angle) * dist,
-                    y: player.y + Math.sin(angle) * dist,
+                    x: spawnX,
+                    y: spawnY,
                     vx: 0, vy: 0, // 慣性移動用
-                    hp: CONFIG.ENEMY_BASE_HP + playerStats.level * CONFIG.ENEMY_HP_LEVEL_MULT,
+                    hp: enemyMaxHp,
+                    maxHp: enemyMaxHp,
                     flashTimer: 0,
                     heat: 0,
                     isOverheated: false,
@@ -1136,9 +1430,10 @@
                     const emitY = e.y - Math.sin(e.angle) * (CONFIG.ENEMY_SIZE_W / 2);
                     entities.particles.push({
                         x: emitX, y: emitY,
-                        vx: e.vx * CONFIG.PARTICLE_VEL_MULT + (Math.random() - 0.5) * 2,
-                        vy: e.vy * CONFIG.PARTICLE_VEL_MULT + (Math.random() - 0.5) * 2,
-                        life: 0.8
+                        vx: e.vx * CONFIG.PARTICLE_VEL_MULT - Math.cos(e.angle) * CONFIG.PARTICLE_SPEED + (Math.random() - 0.5) * CONFIG.PARTICLE_SPREAD,
+                        vy: e.vy * CONFIG.PARTICLE_VEL_MULT - Math.sin(e.angle) * CONFIG.PARTICLE_SPEED + (Math.random() - 0.5) * CONFIG.PARTICLE_SPREAD,
+                        life: 0.8,
+                        type: 'ENEMY_THRUSTER'
                     });
                 }
 
@@ -1270,6 +1565,13 @@
                     spawnExplosion(e.x, e.y);
                     spawnDeathDebris(e.x, e.y, enemyColor, e.vx, e.vy);
                     entities.gems.push({ x: e.x, y: e.y, exp: CONFIG.GEM_BASE_EXP, locked: false, speed: CONFIG.GEM_MAGNET_BASE_SPEED });
+                    
+                    GAME.credits += 100;
+                    GAME.killCount++;
+                    if (GAME.killCount === CONFIG.MISSION_QUOTA) {
+                        Cielo.play("ノルマ達成ですー、無理せず帰ってきてくださいね");
+                    }
+                    
                     entities.enemies.splice(i, 1);
                     continue;
                 }
@@ -1283,7 +1585,7 @@
                 const dist = Math.hypot(gdx, gdy);
 
                 // 一度吸引範囲に入ったらロックオン状態になり、加速度がついて必ず回収できる
-                if (dist < CONFIG.GEM_MAGNET_RADIUS) {
+                if (dist < CONFIG.EXP_MAGNET_RADIUS) {
                     g.locked = true;
                 }
 
@@ -1298,6 +1600,40 @@
                     entities.gems.splice(i, 1);
                     checkLevelUp();
                 }
+            }
+
+            // --- 母艦着艦・ミッションクリア判定 ---
+            if (GAME.killCount >= CONFIG.MISSION_QUOTA && !GAME.isMissionClear && !GAME.isPlayerDying) {
+                const mw = CONFIG.PLAYER_SIZE_W; // カタパルト幅 (判定用)
+                const mh = mw;
+                if (Math.abs(player.x - CONFIG.MOTHERSHIP_X) < mw && Math.abs(player.y - CONFIG.MOTHERSHIP_Y) < mh) {
+                    if (Math.hypot(player.vx, player.vy) <= 5) {
+                        // 着艦成功
+                        GAME.isMissionClear = true;
+                        Cielo.play("おかえりなさい、お疲れ様でした！");
+                        setTimeout(() => {
+                            GAME.state = 'GAMEOVER';
+                            document.getElementById('game-over-screen').style.display = 'block';
+                            document.querySelector('#game-over-screen h2').innerText = 'MISSION CLEAR';
+                            document.querySelector('#game-over-screen h2').style.color = '#0ff';
+                        }, 2000);
+                    }
+                }
+            }
+            
+            // クレジットのカウントアップ演出
+            if (GAME.displayCredits < GAME.credits) {
+                GAME.displayCredits += 5;
+                if (GAME.displayCredits > GAME.credits) GAME.displayCredits = GAME.credits;
+            }
+            document.getElementById('ui-credits').innerText = GAME.displayCredits;
+
+            // HP20%以下の通信
+            if (playerStats.hp > 0 && playerStats.hp <= playerStats.maxHp * 0.2 && !player._hpWarningPlayed) {
+                player._hpWarningPlayed = true;
+                Cielo.play("無理しないで、帰還してください！");
+            } else if (playerStats.hp > playerStats.maxHp * 0.2) {
+                player._hpWarningPlayed = false;
             }
 
             // 万が一の自機HPゼロ判定のセーフガード
@@ -1343,7 +1679,43 @@
             document.getElementById('ui-level').innerText = playerStats.level;
             document.getElementById('ui-exp').innerText = playerStats.exp;
             document.getElementById('ui-next-exp').innerText = playerStats.nextLevelExp;
-            document.getElementById('ui-hp').innerText = playerStats.hp;
+            document.getElementById('ui-hp').innerText = Math.floor(playerStats.hp);
+
+            // 右下 Stats Panel 更新
+            const shotsPerSec = (60 / playerStats.fireRate).toFixed(1);
+
+            const statsHtml = `
+                <div class="stat-category">
+                    <div class="stat-category-title">// HULL</div>
+                    <div class="stat-row"><span class="stat-label">INTEGRITY</span><span class="stat-value">Lv${playerStats.level} ${Math.floor(playerStats.hp)}/${playerStats.maxHp}</span></div>
+                    <div class="stat-row"><span class="stat-label">PHY. RESIST</span><span class="stat-value">Lv1 100</span></div>
+                    <div class="stat-row"><span class="stat-label">HEAT RESIST</span><span class="stat-value">Lv1 100</span></div>
+                    <div class="stat-row"><span class="stat-label">EXP. RESIST</span><span class="stat-value">Lv1 100</span></div>
+                    <div class="stat-row"><span class="stat-label">HEAT CAP.</span><span class="stat-value">Lv1 ${CONFIG.HEAT_MAX}</span></div>
+                </div>
+                <div class="stat-category">
+                    <div class="stat-category-title">// VULCAN</div>
+                    <div class="stat-row"><span class="stat-label">PROJECTILES</span><span class="stat-value">Lv${playerStats.upgrades.bulletCount} ${playerStats.bulletCount}</span></div>
+                    <div class="stat-row"><span class="stat-label">FIRE RATE</span><span class="stat-value">Lv${playerStats.upgrades.fireRate} ${shotsPerSec}/s</span></div>
+                    <div class="stat-row"><span class="stat-label">HEAT EFF.</span><span class="stat-value">Lv1 100</span></div>
+                </div>
+                <div class="stat-category">
+                    <div class="stat-category-title">// THRUSTER</div>
+                    <div class="stat-row"><span class="stat-label">MAX SPEED</span><span class="stat-value">Lv${playerStats.upgrades.moveSpeed} ${(playerStats.maxSpeed).toFixed(1)}</span></div>
+                    <div class="stat-row"><span class="stat-label">ACCEL</span><span class="stat-value">Lv${playerStats.upgrades.moveSpeed} ${(playerStats.moveSpeed).toFixed(2)}</span></div>
+                    <div class="stat-row"><span class="stat-label">HANDLING</span><span class="stat-value">Lv1 100</span></div>
+                </div>
+                <div class="stat-category">
+                    <div class="stat-category-title">// SHIELD SYS</div>
+                    <div class="stat-row"><span class="stat-label">ENERGY</span><span class="stat-value">Lv1 100/100</span></div>
+                    <div class="stat-row"><span class="stat-label">STRENGTH</span><span class="stat-value">Lv1 100</span></div>
+                </div>
+                <div class="stat-category">
+                    <div class="stat-category-title">// ANCHOR GARAGE</div>
+                    <div class="stat-row"><span class="stat-label">HULL INTEGRITY</span><span class="stat-value">Lv1 1000/1000</span></div>
+                </div>
+            `;
+            document.getElementById('stats-panel').innerHTML = statsHtml;
         }
 
         // ==========================================
@@ -1368,20 +1740,70 @@
             ctx.save();
             ctx.translate(GAME.width / 2 - player.x, GAME.height / 2 - player.y);
 
+            // --- 母艦 (Anchor Garage) 描画 ---
+            ctx.save();
+            ctx.translate(CONFIG.MOTHERSHIP_X, CONFIG.MOTHERSHIP_Y);
+            // 上向きなので -PI/2
+            ctx.rotate(-Math.PI / 2);
+            // コア
+            ctx.fillStyle = '#112233';
+            ctx.fillRect(-100, -80, 200, 160);
+            ctx.strokeStyle = '#0ff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-100, -80, 200, 160);
+            // モジュール
+            ctx.fillStyle = '#223344';
+            ctx.fillRect(-60, -120, 120, 40);
+            ctx.fillRect(-60, 80, 120, 40);
+            ctx.strokeRect(-60, -120, 120, 40);
+            ctx.strokeRect(-60, 80, 120, 40);
+            // 発着カタパルト (幅は CONFIG.PLAYER_SIZE_W)
+            ctx.fillStyle = '#334455';
+            const catW = 150;
+            const catH = CONFIG.PLAYER_SIZE_W;
+            ctx.fillRect(100, -catH / 2, catW, catH);
+            // カタパルト上のライン
+            ctx.strokeStyle = '#ff0';
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(100, 0);
+            ctx.lineTo(100 + catW, 0);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // 発光部
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+            ctx.beginPath();
+            ctx.arc(0, 0, 40, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
             entities.gems.forEach(g => {
                 ctx.drawImage(SpriteCache.gem, g.x - SpriteCache.gem.width / 2, g.y - SpriteCache.gem.height / 2);
             });
 
             entities.particles.forEach(p => {
-                ctx.globalAlpha = p.life;
-                const scale = Math.max(0.1, p.life);
                 ctx.save();
                 ctx.translate(p.x, p.y);
-                ctx.scale(scale, scale);
                 if (p.type === 'DEBRIS_SMOKE') {
-                    ctx.drawImage(SpriteCache.debrisSmoke, -SpriteCache.debrisSmoke.width / 2, -SpriteCache.debrisSmoke.height / 2);
+                    // 半透明の煙（灰色の●で表現、拡大しながら薄れて消える）
+                    const progress = 1.0 - (p.life / p.maxLife); // 0.0 〜 1.0
+                    const scale = 1.0 + progress * 1.0; // 1倍から2倍へ拡大
+                    ctx.globalAlpha = Math.max(0, p.life);
+                    ctx.scale(scale, scale);
+                    ctx.fillStyle = '#888'; // 灰色
+                    ctx.beginPath();
+                    ctx.arc(0, 0, p.baseSize / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (p.type === 'ENEMY_THRUSTER') {
+                    ctx.globalAlpha = Math.max(0, p.life);
+                    const scale = Math.max(0.1, p.life);
+                    ctx.scale(scale, scale);
+                    ctx.drawImage(SpriteCache.particleEnemy, -SpriteCache.particleEnemy.width / 2, -SpriteCache.particleEnemy.height / 2);
                 } else {
-                    ctx.drawImage(SpriteCache.particle, -SpriteCache.particle.width / 2, -SpriteCache.particle.height / 2);
+                    ctx.globalAlpha = Math.max(0, p.life);
+                    const scale = Math.max(0.1, p.life);
+                    ctx.scale(scale, scale);
+                    ctx.drawImage(SpriteCache.particlePlayer, -SpriteCache.particlePlayer.width / 2, -SpriteCache.particlePlayer.height / 2);
                 }
                 ctx.restore();
             });
@@ -1410,12 +1832,28 @@
                 ctx.save();
                 ctx.translate(e.x, e.y);
 
-                // 敵のヒートゲージ (機体の下に回転せず描画 - 全て共通のオレンジ)
+                // 敵のHPゲージ・ヒートゲージ (機体の下に回転せず描画)
+                const barW = 30;
+                // 上段：HPゲージ
+                const hpRatio = Math.max(0, e.hp / e.maxHp);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(-barW / 2, 22, barW, 3);
+                ctx.fillStyle = hpRatio <= 0.2 ? '#f00' : '#0f0';
+                ctx.fillRect(-barW / 2, 22, barW * hpRatio, 3);
+
+                // 下段：ヒートゲージ
                 if (e.heat > 0) {
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-                    ctx.fillRect(-15, 22, 30, 3);
-                    ctx.fillStyle = e.isOverheated ? '#808080' : '#f80';
-                    ctx.fillRect(-15, 22, 30 * (e.heat / CONFIG.HEAT_MAX), 3);
+                    const heatRatio = Math.max(0, Math.min(1, e.heat / CONFIG.HEAT_MAX));
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    ctx.fillRect(-barW / 2, 26, barW, 3);
+                    if (e.isOverheated) {
+                        ctx.fillStyle = '#808080';
+                    } else if (heatRatio > 0.8) {
+                        ctx.fillStyle = '#f80';
+                    } else {
+                        ctx.fillStyle = '#fff';
+                    }
+                    ctx.fillRect(-barW / 2, 26, barW * heatRatio, 3);
                 }
 
                 ctx.rotate(e.angle);
@@ -1438,11 +1876,19 @@
 
             // 自機描画とマイクロHUD (生存時のみ)
             if (!GAME.isPlayerDying) {
-                // 自機描画
+                // 自機描画 (土台)
                 ctx.save();
                 ctx.translate(player.x, player.y);
-                ctx.rotate(player.angle);
+                ctx.rotate(player.bodyAngle);
                 ctx.drawImage(SpriteCache.player, -SpriteCache.player.width / 2, -SpriteCache.player.height / 2);
+                ctx.restore();
+                
+                // 砲塔描画
+                ctx.save();
+                ctx.translate(player.x, player.y);
+                ctx.rotate(player.turretAngle);
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(0, -3, CONFIG.PLAYER_SIZE_W / 2 + 8, 6);
                 ctx.restore();
 
                 // ----------------------------------------
@@ -1450,45 +1896,68 @@
                 // ----------------------------------------
                 ctx.save();
                 ctx.translate(player.x, player.y);
-                const hudRadius = 45;
                 ctx.lineWidth = 4;
 
-                // HPゲージ（左側：下から上へ充填）
+                // --- 右側：HPゲージ (内側 半径39、2時〜4時) ---
+                const hpRadius = 39;
                 ctx.beginPath();
-                ctx.arc(0, 0, hudRadius, 0.7 * Math.PI, 1.3 * Math.PI);
+                ctx.arc(0, 0, hpRadius, -Math.PI / 6, Math.PI / 6); // 背景 (2時〜4時)
                 ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
                 ctx.stroke();
 
                 const hpRatio = Math.max(0, playerStats.hp / playerStats.maxHp);
                 if (hpRatio > 0) {
                     ctx.beginPath();
-                    // 1.3*PI (下) から上へ向かって描画するため、反時計回り(true)を指定
-                    ctx.arc(0, 0, hudRadius, 1.3 * Math.PI, 1.3 * Math.PI - (0.6 * Math.PI * hpRatio), true);
+                    const startAngle = -Math.PI / 6;
+                    const endAngle = startAngle + (Math.PI / 3) * hpRatio;
+                    ctx.arc(0, 0, hpRadius, startAngle, endAngle, false);
                     ctx.strokeStyle = hpRatio > 0.5 ? '#0f0' : hpRatio > 0.25 ? '#ff0' : '#f00';
                     ctx.stroke();
                 }
 
-                // ヒートゲージ（右側：下から上へ充填）
+                // --- 右側：ヒートゲージ (外側 半径45、2時〜4時) ---
+                const heatRadius = 45;
                 ctx.beginPath();
-                ctx.arc(0, 0, hudRadius, -0.3 * Math.PI, 0.3 * Math.PI);
+                ctx.arc(0, 0, heatRadius, -Math.PI / 6, Math.PI / 6); // 背景 (2時〜4時)
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
                 ctx.stroke();
 
                 const heatRatio = Math.max(0, Math.min(1, playerStats.heat / CONFIG.HEAT_MAX));
                 if (heatRatio > 0) {
                     ctx.beginPath();
-                    // 0.3*PI (下) から上へ向かって描画するため、反時計回り(true)を指定
-                    ctx.arc(0, 0, hudRadius, 0.3 * Math.PI, 0.3 * Math.PI - (0.6 * Math.PI * heatRatio), true);
-
+                    const startAngle = -Math.PI / 6;
+                    const endAngle = startAngle + (Math.PI / 3) * heatRatio;
+                    ctx.arc(0, 0, heatRadius, startAngle, endAngle, false);
                     if (player.isOverheated) {
-                        ctx.strokeStyle = '#808080'; // オーバーヒート時はグレー
+                        ctx.strokeStyle = '#808080';
                     } else if (heatRatio > 0.8) {
-                        ctx.strokeStyle = '#f80';    // 危険域はオレンジ
+                        ctx.strokeStyle = '#f80';
                     } else {
-                        ctx.strokeStyle = '#fff';    // 通常時は白
+                        ctx.strokeStyle = '#fff';
                     }
                     ctx.stroke();
                 }
+
+                // --- 左側：EXPゲージ (内側 半径39、10時〜8時) ---
+                const expRadius = 39;
+                ctx.beginPath();
+                // 10時は 5PI/6 (150度), 8時は 7PI/6 (210度) => -5PI/6 (210度) to -7PI/6? 
+                // 12= -90, 9= 180 (PI), 10= 210, 8= 150.
+                // 210 to 150 (counter clockwise) or 150 to 210 (clockwise).
+                ctx.arc(0, 0, expRadius, 5 * Math.PI / 6, 7 * Math.PI / 6); // 背景
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
+                ctx.stroke();
+
+                const expRatio = Math.max(0, Math.min(1, playerStats.exp / playerStats.nextLevelExp));
+                if (expRatio > 0) {
+                    ctx.beginPath();
+                    const startAngle = 7 * Math.PI / 6; // 8時から
+                    const endAngle = startAngle - (Math.PI / 3) * expRatio; // 10時へ向かって
+                    ctx.arc(0, 0, expRadius, startAngle, endAngle, true); 
+                    ctx.strokeStyle = '#0ff';
+                    ctx.stroke();
+                }
+
                 ctx.restore();
             }
 
@@ -1535,59 +2004,127 @@
             ctx.restore(); // カメラ適用終了
 
             // ----------------------------------------
-            // 画面外エネミーの方向マーカー描画
+            // プレイヤー中心レーダーと敵方向マーカー描画
             // ----------------------------------------
-            entities.enemies.forEach(e => {
-                const dx = e.x - player.x;
-                const dy = e.y - player.y;
-                const margin = 25; // 画面端からのマージン
-                const halfW = GAME.width / 2 - margin;
-                const halfH = GAME.height / 2 - margin;
+            if (!GAME.isPlayerDying) {
+                ctx.save();
+                ctx.translate(GAME.width / 2, GAME.height / 2);
 
-                if (Math.abs(dx) > halfW || Math.abs(dy) > halfH) {
-                    let drawX = 0;
-                    let drawY = 0;
+                // レーダーゲージ（真円）
+                const radarRadius = CONFIG.RADAR_RADIUS;
+                ctx.strokeStyle = 'rgba(255, 0, 0, 1.0)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(0, 0, radarRadius, 0, Math.PI * 2);
+                ctx.stroke();
 
-                    // 画面の矩形境界との交点を求める
-                    if (Math.abs(dx * halfH) > Math.abs(dy * halfW)) {
-                        // 左右の端に交差
-                        drawX = dx > 0 ? halfW : -halfW;
-                        drawY = drawX * (dy / dx);
-                    } else {
-                        // 上下の端に交差
-                        drawY = dy > 0 ? halfH : -halfH;
-                        drawX = drawY * (dx / dy);
-                    }
-
-                    const screenX = GAME.width / 2 + drawX;
-                    const screenY = GAME.height / 2 + drawY;
-                    const angle = Math.atan2(dy, dx);
-
-                    ctx.save();
-                    ctx.translate(screenX, screenY);
-                    ctx.rotate(angle + Math.PI / 2); // ▲の頂点が敵の方向を向くように回転
-
-                    ctx.fillStyle = 'rgba(255, 50, 50, 0.8)';
-                    ctx.strokeStyle = 'rgba(255, 50, 50, 0.8)';
-
-                    // 赤い▲
+                // ヒゲ（東西南北＋斜め45度）
+                for (let i = 0; i < 8; i++) {
+                    const a = (Math.PI / 4) * i;
+                    const cosA = Math.cos(a);
+                    const sinA = Math.sin(a);
                     ctx.beginPath();
-                    ctx.moveTo(0, -12); // 先端
-                    ctx.lineTo(-8, 4);  // 左下
-                    ctx.lineTo(8, 4);   // 右下
-                    ctx.closePath();
-                    ctx.fill();
-
-                    // 下部の線（天地を示す ＿）
-                    ctx.beginPath();
-                    ctx.moveTo(-10, 8);
-                    ctx.lineTo(10, 8);
-                    ctx.lineWidth = 2;
+                    // 5px外側に飛び出すヒゲ
+                    ctx.moveTo(cosA * radarRadius, sinA * radarRadius);
+                    ctx.lineTo(cosA * (radarRadius + 5), sinA * (radarRadius + 5));
                     ctx.stroke();
-
-                    ctx.restore();
                 }
-            });
+                
+                // 砲塔方向を示す TARGET マーカー（▲とTARGETの文字）
+                ctx.save();
+                ctx.rotate(player.turretAngle);
+                ctx.fillStyle = '#fff';
+                // ▲アイコンをレーダー内側に表示
+                ctx.beginPath();
+                ctx.moveTo(radarRadius - 20, 0); // 先端
+                ctx.lineTo(radarRadius - 30, -5); // 後ろ上
+                ctx.lineTo(radarRadius - 30, 5);  // 後ろ下
+                ctx.closePath();
+                ctx.fill();
+                // TARGET文字
+                ctx.font = '10px Courier New';
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                // 文字が裏返らないようにする
+                let textAngle = player.turretAngle;
+                while (textAngle < 0) textAngle += Math.PI * 2;
+                textAngle = textAngle % (Math.PI * 2);
+                if (textAngle > Math.PI / 2 && textAngle < Math.PI * 1.5) {
+                    ctx.translate(radarRadius - 35, 0);
+                    ctx.rotate(Math.PI);
+                    ctx.textAlign = 'left';
+                    ctx.fillText('TARGET', 0, 0);
+                } else {
+                    ctx.fillText('TARGET', radarRadius - 35, 0);
+                }
+                ctx.restore();
+
+                // 画面外エネミーの方向マーカーと距離表示
+                entities.enemies.forEach(e => {
+                    const dx = e.x - player.x;
+                    const dy = e.y - player.y;
+                    const dist = Math.hypot(dx, dy);
+                    const halfW = GAME.width / 2;
+                    const halfH = GAME.height / 2;
+
+                    // 画面外にいる敵のみ表示
+                    if (Math.abs(dx) > halfW || Math.abs(dy) > halfH) {
+                        const angle = Math.atan2(dy, dx);
+
+                        ctx.save();
+                        // 真円のすぐ外側（半径 + 15pxの位置）にマーカーを配置
+                        const markerX = Math.cos(angle) * (radarRadius + 15);
+                        const markerY = Math.sin(angle) * (radarRadius + 15);
+                        ctx.translate(markerX, markerY);
+
+                        // マーカー本体の描画（回転させる）
+                        ctx.save();
+                        ctx.rotate(angle + Math.PI / 2); // ▲の頂点が敵の方向を向くように回転
+
+                        ctx.fillStyle = 'rgba(255, 50, 50, 0.8)';
+                        ctx.strokeStyle = 'rgba(255, 50, 50, 0.8)';
+
+                        // 赤い▲
+                        ctx.beginPath();
+                        ctx.moveTo(0, -8);  // 少し小ぶりに調整
+                        ctx.lineTo(-6, 4);
+                        ctx.lineTo(6, 4);
+                        ctx.closePath();
+                        ctx.fill();
+
+                        // 下部の線（天地を示す ＿）
+                        ctx.beginPath();
+                        ctx.moveTo(-8, 6);
+                        ctx.lineTo(8, 6);
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                        ctx.restore(); // マーカーの回転リセット
+
+                        // 距離テキストの描画（回転させず水平を保つ）
+                        let distText = "";
+                        if (dist >= 999) {
+                            distText = (dist / 1000).toFixed(1) + "km";
+                        } else {
+                            distText = Math.floor(dist) + "m";
+                        }
+
+                        // テキスト位置をさらに外側へ押し出す
+                        const textOffset = 18;
+                        const textX = Math.cos(angle) * textOffset;
+                        const textY = Math.sin(angle) * textOffset;
+
+                        ctx.fillStyle = 'rgba(255, 50, 50, 0.9)';
+                        ctx.font = 'bold 12px Courier New';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(distText, textX, textY);
+
+                        ctx.restore(); // 位置リセット
+                    }
+                });
+
+                ctx.restore();
+            }
 
             // ----------------------------------------
             // 被弾時の画面全体赤フラッシュ演出
