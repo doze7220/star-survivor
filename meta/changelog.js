@@ -1,5 +1,137 @@
 const changelog = [
   {
+    version: "v0.2.2 (Mothership Polish)",
+    date: "2026-05-18",
+    description: "Visual enhancements to the mothership to increase player attachment.",
+    details: [
+      "【演出】母艦の中央コアがゆっくりと明滅（鼓動）するように変更",
+      "【演出】母艦の外装に居住区の窓明かりを追加し、巨大感と生活感を演出",
+      "【演出】補給着艦中、機体の上に『REPAIRING & RESUPPLYING...』と進捗ゲージを表示",
+      "【演出】補給中の進捗に合わせてゲージが伸びる視覚的フィードバックを追加",
+      "【バグ修正】HP全快で着艦した場合はリペアゲージを表示しないよう修正"
+    ]
+  },
+  {
+    version: "v0.2.1 (Landing Guard)",
+    date: "2026-05-18",
+    description: "Landing area hidden during launch/targeted; landing blocked while enemies remain.",
+    details: [
+      "【仕様変更】ランディングエリア表示を着艦中・発艦カウントダウン中・敵ターゲット中・クリア後に非表示",
+      "【仕様変更】生存敵がいる間は着艦不可に変更",
+      "【通信】母艦半径200px以内に近づいた際、敵ターゲット中なら「敵機からターゲット中です！排除しないと着艦できません！」を最大5秒周期で再生",
+      "【実装】GAME.landingBlockedTimerを追加し警告メッセージの連続再生を防止"
+    ]
+  },
+  {
+    version: "v0.2.0 (Resupply Loop)",
+    date: "2026-05-18",
+    description: "Always-available landing with HP resupply and relaunch; landing area visual added.",
+    details: [
+      "【仕様変更】着艦をミッション未クリア時も常時可能にする（補給着艦）",
+      "【着艦】補給着艦時：HP全快後カウントダウン再発艦シーケンスを開始",
+      "【通信】ミッション未クリア着艦時「着艦シーケンス開始します」（先端ロック時）",
+      "【通信】ガレージ固定後、HP最大でない場合「お疲れ様でした。補給は任せてください」",
+      "【通信】ガレージ固定後、HP最大の場合「あれ？何しに戻ってきたんですか？ さあ、お仕事が待ってますよ！」",
+      "【通信】ミッションクリア着艦時は従来通り（変更なし）",
+      "【UI】ランディングエリアを薄いグリーンの半透明円で表示、エリア上部にLANDING AREAラベル",
+      "【デバッグ】4キーリセット時にlandingForClearも初期化するよう追加"
+    ]
+  },
+  {
+    version: "v0.1.9 (Landing Fix)",
+    date: "2026-05-18",
+    description: "Fixed landing sequence never triggering due to coordinate system mismatch.",
+    details: [
+      "【バグ修正】母艦描画の ctx.rotate(-π/2) を考慮せずローカル座標をワールド座標として使用していた根本バグを修正",
+      "【バグ修正】getCatapultSpec() をワールド座標(tipX:0,tipY:-230, rootX:0,rootY:-80)を返すように変更",
+      "【バグ修正】着艦トリガー判定を正しいワールド座標 Math.hypot(player.x-cat.tipX, player.y-cat.tipY)<=50 に修正",
+      "【バグ修正】着艦シーケンス各フェーズの目標座標を新しい cat.tipY/rootY に統一",
+      "【デバッグ】4キー（ミッション強制クリア）でisLandingSequence/landingPhase/isResultTriggeredもリセットするよう修正"
+    ]
+  },
+  {
+    version: "v0.1.8 (Mission Force Clear)",
+    date: "2026-05-18",
+    description: "Added a mission force-clear debug key for landing checks.",
+    details: [
+      "【デバッグ】4キーでミッション条件を強制的に満たし、着艦チェックへ入りやすく変更",
+      "【UI】デバッグキーバインド表示に4:ミッション強制クリアを追加"
+    ]
+  },
+  {
+    version: "v0.1.7 (Item & Debug Pass)",
+    date: "2026-05-18",
+    description: "Added heal and big EXP drops plus developer debug actions.",
+    details: [
+      "【アイテム】HP回復アイテムを追加（EXPと同系統の見た目、オレンジ色、20%で同時出現）",
+      "【アイテム】極大EXPを追加（EXPの1.5倍サイズ、黄色い十字星＋白→紫の縁取り）",
+      "【アイテム】極大EXPの獲得量を通常EXPの10倍に設定し、倍率をコンフィグ化",
+      "【デバッグ】1キーでHP全快、2キーで敵リスポーンON/OFF、3キーで敵即時全滅を追加",
+      "【UI】左下のキーバインド表示を更新"
+    ]
+  },
+  {
+    version: "v0.1.6 (Docking Feedback)",
+    date: "2026-05-18",
+    description: "Refined docking feedback timing and stopped inertial star scrolling on death.",
+    details: [
+      "【着艦】カタパルト先端50px以内で操作を奪う挙動を維持しつつ、先端到達時に着艦メッセージを出すよう調整",
+      "【着艦】先端到達時にバーニア噴出光（トレイル）を消去し、着陸したように見せる演出を追加",
+      "【着艦】先端→根本→機首反転→3秒待機→MISSION CLEAR の流れを維持",
+      "【死亡】ゲームオーバー時に星背景の慣性スクロールを停止するよう修正"
+    ]
+  },
+  {
+    version: "v0.1.5 (Alpha 3 Input Pass)",
+    date: "2026-05-18",
+    description: "Updated the default flight controls, rebound missile fire, and added a visible keybind panel.",
+    details: [
+      "【操作】後退推力を前進推力の半分に調整",
+      "【操作】ミサイル発射をCTRLからEキーへ変更",
+      "【操作】バルカン入力を右クリックまたはSpaceに変更",
+      "【UI】画面左下にキーバインド表示を追加し、白・左詰め・18pxで表示",
+      "【UI】キーバインド文言をW/S,A/D,RClick&Space,E,Shiftで統一"
+    ]
+  },
+  {
+    version: "v0.1.4 (Alpha 3 Docking Layout)",
+    date: "2026-05-18",
+    description: "Adjusted the docking lock area, hid radar UI during landing, and tightened HUD/comms alignment.",
+    details: [
+      "【操作】デフォルト操作モードをSUBSPACEへ変更",
+      "【操作】サブスペースモードではマウス追従を使わず、A/D入力のみで旋回するよう変更",
+      "【着艦】カタパルト先端半径50pxで着艦シーケンスを開始するよう拡大",
+      "【着艦】着艦シーケンス中はレーダー表示類を非表示に変更",
+      "【通信】Cieloメッセージをさらに10px上へ移動",
+      "【HUD】レーダー下に飛行速度を表示し、左ステータス表示のカテゴリ/Lv/value揃えを微調整"
+    ]
+  },
+  {
+    version: "v0.1.3 (Alpha 3 Docking Polish)",
+    date: "2026-05-18",
+    description: "Refined the docking sequence, moved comms near the radar, and exposed current flight speed in the HUD.",
+    details: [
+      "【着艦】カタパルト先端で操作を奪う着艦シーケンスを追加",
+      "【着艦】先端着陸→根本まで牽引→機首上向き回転→3秒待機→MISSION CLEAR の段階式に改良",
+      "【通信】Cieloメッセージの表示位置を索敵レーダー上部へ移動",
+      "【HUD】レーダー下に現在の飛行速度（km/s）を表示する項目を追加",
+      "【整備】着艦開始時点で帰還完了扱いとなるようフラグを整理"
+    ]
+  },
+  {
+    version: "v0.1.2 (Alpha 3 Control Mode)",
+    date: "2026-05-18",
+    description: "Added control mode switching, handling scaling, and HUD exposure for flight feel validation.",
+    details: [
+      "【操作】`C`キーで`MOUSE_AIM` / `SUBSPACE`をリアルタイム切り替え可能に変更",
+      "【操作】`HANDLING`ステータスを追加し、旋回速度をアップグレード連動に変更",
+      "【操作】マウスエイム時は砲塔追従、サブスペース時は機首固定の射撃モデルに対応",
+      "【操作】サブスペースモード中はA/Dによる手動旋回をマウス追従より優先する競合解決を実装",
+      "【HUD】右下ステータスパネルに`HANDLING`値と現在の`CTRL MODE`を表示するよう更新",
+      "【整備】アルファ焦点仕様を追加し、コア体験の判定基準を明文化"
+    ]
+  },
+  {
     version: "v0.1.1 (Alpha 2 Polish)",
     date: "2026-05-18",
     description: "Visual upgrades for bullets and engine trails, and dynamic boost effects.",

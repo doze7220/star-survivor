@@ -147,9 +147,9 @@
         /* Cielo Communication */
         #cielo-comm {
             position: absolute;
-            top: 20px;
+            top: calc(50% - 220px);
             left: 50%;
-            transform: translateX(-50%);
+            transform: translate(-50%, -100%);
             color: #0f0;
             font-size: 18px;
             font-weight: bold;
@@ -190,6 +190,20 @@
             pointer-events: none;
         }
 
+        /* Keybind Panel */
+        #keybind-panel {
+            position: absolute;
+            left: 20px;
+            bottom: 20px;
+            color: #fff;
+            font-size: 18px;
+            line-height: 1.35;
+            text-shadow: 1px 1px 2px #000;
+            text-align: left;
+            white-space: pre-line;
+            pointer-events: none;
+        }
+
         /* Stats Panel (右下UI) */
         #stats-panel {
             position: absolute;
@@ -224,22 +238,31 @@
         }
 
         .stat-row {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
+            display: grid;
+            grid-template-columns: 132px 44px minmax(92px, 1fr);
+            align-items: baseline;
+            column-gap: 10px;
         }
 
         .stat-label {
             color: #888;
             font-family: 'Courier New', Courier, monospace;
+            text-align: right;
+        }
+
+        .stat-level {
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            text-align: left;
+            white-space: nowrap;
         }
 
         .stat-value {
             color: #fff;
-            min-width: 80px;
             text-align: right;
             font-weight: bold;
             font-family: 'Courier New', Courier, monospace;
+            white-space: nowrap;
         }
     </style>
 </head>
@@ -250,6 +273,9 @@
     <div id="ui-layer">
         <div id="credits-panel">BOUNTY: <span id="ui-credits">0</span> c</div>
         <div id="cielo-comm"></div>
+        <div id="keybind-panel">W/S:前進・後退  A/D:左右旋回
+RClick&Space:バルカン  E:ミサイル  Shift:ブースト
+DEBUG - 1:HP全快  2:リスポーン切替  3:敵全滅  4:ミッション強制クリア</div>
         <div id="countdown-overlay"></div>
         <div id="hud">
             <div>LEVEL: <span id="ui-level">1</span></div>
@@ -280,10 +306,11 @@
         // ==========================================
         const CONFIG = {
             // 【物理・自機基本設定】
-            FRICTION: 0.998,               // 宇宙空間の摩擦係数（慣性のすべり具合。1.0で完全無摩擦）
-            PLAYER_BASE_MOVE_SPEED: 1.0,    // 自機の初期移動力（W/A/S/Dキー押し込み時の加速度）
+            FRICTION: 0.999,               // 宇宙空間の摩擦係数（慣性のすべり具合。1.0で完全無摩擦）
+            PLAYER_BASE_MOVE_SPEED: 1.2,    // 自機の初期移動力（W/A/S/Dキー押し込み時の加速度）
             PLAYER_BASE_MAX_SPEED: 8.0,     // 自機の初期最高速度
-            PLAYER_BASE_HP: 150,          // 自機の初期HP
+            PLAYER_BASE_HANDLING: 0.06,     // 自機の初期旋回速度（ラジアン/フレーム）
+            PLAYER_BASE_HP: 250,          // 自機の初期HP
             PLAYER_SIZE_W: 30,            // 自機のグラフィック幅（ピクセル）
             PLAYER_SIZE_H: 36,            // 自機のグラフィック高（ピクセル）
 
@@ -330,6 +357,11 @@
             // 【経験値ジェム・成長システム設定】
             GEM_SIZE: 24,                 // 経験値ジェムのサイズ (2倍に拡大)
             GEM_BASE_EXP: 20,             // ジェム1個あたりから獲得できる基本経験値量
+            HEAL_ITEM_DROP_CHANCE: 0.2,   // HP回復アイテムの出現率
+            HEAL_ITEM_AMOUNT: 50,         // HP回復量
+            BIG_EXP_DROP_CHANCE: 0.1,     // 極大EXPの出現率
+            BIG_EXP_MULT: 10,             // 極大EXPの倍率
+            BIG_EXP_SIZE_MULT: 1.5,       // 極大EXPのサイズ倍率
             EXP_MAGNET_RADIUS: 150,       // 経験値を引き寄せる半径
 
             // --- α2追加仕様 ---
@@ -337,7 +369,7 @@
             MOTHERSHIP_Y: 0,
             SPAWN_X: -1000,
             SPAWN_Y: -6000,
-            SPAWN_TRIGGER_Y: -1000,
+            SPAWN_TRIGGER_Y: -3000,
             MISSION_QUOTA: 10,
             BOOSTER_COOLDOWN: 180, // 3秒(60fps)
             MISSILE_COOLDOWN: 60,  // 1秒
@@ -410,6 +442,8 @@
             particlePlayer: null,
             particleEnemy: null,
             gem: null,
+            gemHeal: null,
+            gemBigExp: null,
             debrisSmoke: null, // デブリの煙用キャッシュ
 
             init: function () {
@@ -423,6 +457,8 @@
                 this.particlePlayer = this.createCircle(CONFIG.COLOR_PARTICLE_PLAYER, CONFIG.PARTICLE_SIZE);
                 this.particleEnemy = this.createCircle(CONFIG.COLOR_PARTICLE_ENEMY, CONFIG.PARTICLE_SIZE);
                 this.gem = this.createDiamond('#0ff', CONFIG.GEM_SIZE);      // シアンの経験値ジェム
+                this.gemHeal = this.createDiamond('#f80', CONFIG.GEM_SIZE);  // オレンジのHP回復アイテム
+                this.gemBigExp = this.createBigExpGem(Math.round(CONFIG.GEM_SIZE * CONFIG.BIG_EXP_SIZE_MULT));
                 this.debrisSmoke = this.createCircle(CONFIG.DEBRIS_SMOKE_COLOR, CONFIG.DEBRIS_SMOKE_SIZE); // デブリの煙
             },
 
@@ -472,6 +508,57 @@
                 ctx.closePath();
                 ctx.fill();
                 return c;
+            },
+
+            createBigExpGem: function (size) {
+                const c = document.createElement('canvas');
+                c.width = size; c.height = size;
+                const ctx = c.getContext('2d');
+                const cx = size / 2;
+                const cy = size / 2;
+                const half = size / 2;
+
+                ctx.save();
+                ctx.translate(cx, cy);
+
+                // 外周の白→紫縁取り
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+                ctx.beginPath();
+                ctx.moveTo(0, -half);
+                ctx.lineTo(half, 0);
+                ctx.lineTo(0, half);
+                ctx.lineTo(-half, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                ctx.strokeStyle = '#b46dff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // 中心の黄色い十字星
+                ctx.strokeStyle = '#ffd700';
+                ctx.lineWidth = Math.max(2, size * 0.08);
+                ctx.beginPath();
+                ctx.moveTo(-half * 0.22, 0);
+                ctx.lineTo(half * 0.22, 0);
+                ctx.moveTo(0, -half * 0.22);
+                ctx.lineTo(0, half * 0.22);
+                ctx.stroke();
+
+                ctx.lineWidth = Math.max(1.5, size * 0.05);
+                ctx.beginPath();
+                ctx.moveTo(-half * 0.12, -half * 0.12);
+                ctx.lineTo(half * 0.12, half * 0.12);
+                ctx.moveTo(-half * 0.12, half * 0.12);
+                ctx.lineTo(half * 0.12, -half * 0.12);
+                ctx.stroke();
+
+                ctx.restore();
+                return c;
             }
         };
 
@@ -512,6 +599,8 @@
         // ==========================================
         const GAME = {
             state: 'PLAYING', // PLAYING, PAUSED, GAMEOVER
+            controlMode: 'SUBSPACE', // MOUSE_AIM, SUBSPACE
+            debugEnemyRespawnEnabled: true,
             width: window.innerWidth,
             height: window.innerHeight,
             mouseX: 0,
@@ -526,18 +615,57 @@
             isResultTriggered: false, // リザルト画面のトリガー用フラグ
             quotaReminderTimer: 0, // ノルマ達成通知用タイマー
             launchSequence: true, // ゲーム開始時の発進シーケンス中か
-            launchTimer: 0        // 発進カウントダウン用タイマー
+            launchTimer: 0,       // 発進カウントダウン用タイマー
+            landingBlockedTimer: 0 // 着艦不可警告の連続再生防止タイマー
         };
 
         const keys = {};
-        const mouse = { x: GAME.width / 2, y: GAME.height / 2, isDown: false };
+        const mouse = { x: GAME.width / 2, y: GAME.height / 2, leftDown: false, rightDown: false };
 
         // 入力イベント
-        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+
+            if (e.code === 'KeyC' && !e.repeat && GAME.state === 'PLAYING' && !GAME.launchSequence && !player.isLandingSequence && !GAME.isPlayerDying) {
+                GAME.controlMode = GAME.controlMode === 'MOUSE_AIM' ? 'SUBSPACE' : 'MOUSE_AIM';
+                Cielo.play(GAME.controlMode === 'MOUSE_AIM' ? "マウスエイムモードですー" : "サブスペースモードですー");
+            } else if (GAME.state === 'PLAYING' && !e.repeat) {
+                if (e.code === 'Digit1' || e.code === 'Numpad1') {
+                    playerStats.hp = playerStats.maxHp;
+                    player.isOverheated = false;
+                    player.overheatTimer = 0;
+                    GAME.damageFlashTimer = 0;
+                    Cielo.play("HP全快ですー");
+                } else if (e.code === 'Digit2' || e.code === 'Numpad2') {
+                    GAME.debugEnemyRespawnEnabled = !GAME.debugEnemyRespawnEnabled;
+                    Cielo.play(GAME.debugEnemyRespawnEnabled ? "敵リスポーンONですー" : "敵リスポーンOFFですー");
+                } else if (e.code === 'Digit3' || e.code === 'Numpad3') {
+                    clearAllEnemiesInstantly();
+                    Cielo.play("敵を全滅させましたー");
+                } else if (e.code === 'Digit4' || e.code === 'Numpad4') {
+                    GAME.killCount = CONFIG.MISSION_QUOTA;
+                    GAME.isMissionClear = false;
+                    GAME.isResultTriggered = false;
+                    GAME.quotaReminderTimer = 0;
+                    player.isLandingSequence = false;
+                    player.landingPhase = 'NONE';
+                    player.landingTimer = 0;
+                    player.landingForClear = false;
+                    Cielo.play("ミッション強制クリアですー");
+                }
+            }
+        });
         window.addEventListener('keyup', e => keys[e.code] = false);
         window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
-        window.addEventListener('mousedown', e => mouse.isDown = true);
-        window.addEventListener('mouseup', e => mouse.isDown = false);
+        window.addEventListener('mousedown', e => {
+            if (e.button === 0) mouse.leftDown = true;
+            if (e.button === 2) mouse.rightDown = true;
+        });
+        window.addEventListener('mouseup', e => {
+            if (e.button === 0) mouse.leftDown = false;
+            if (e.button === 2) mouse.rightDown = false;
+        });
+        window.addEventListener('contextmenu', e => e.preventDefault());
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -553,6 +681,7 @@
             fireRate: CONFIG.BULLET_BASE_FIRE_RATE,   // 連射速度（フレーム間隔）
             bulletCount: 1, // 同時発射数
             moveSpeed: CONFIG.PLAYER_BASE_MOVE_SPEED, // 加速度係数
+            handling: CONFIG.PLAYER_BASE_HANDLING,
             maxSpeed: CONFIG.PLAYER_BASE_MAX_SPEED,
             hp: CONFIG.PLAYER_BASE_HP,
             maxHp: CONFIG.PLAYER_BASE_HP,
@@ -560,7 +689,8 @@
             upgrades: {
                 fireRate: 1,
                 bulletCount: 1,
-                moveSpeed: 1
+                moveSpeed: 1,
+                handling: 1
             }
         };
 
@@ -613,9 +743,39 @@
             missileCooldown: 0,
             boosterCooldown: 0,
             isLandingSequence: false, // 着艦のアニメーション演出中か
+            landingPhase: 'NONE',
+            landingTimer: 0,
+            landingForClear: false,  // true=ミッションクリア着艦 / false=補給着艦
             leftTrailHistory: [],
             rightTrailHistory: []
         };
+
+        function normalizeAngle(angle) {
+            return Math.atan2(Math.sin(angle), Math.cos(angle));
+        }
+
+        function rotateTowards(current, target, maxStep) {
+            const diff = normalizeAngle(target - current);
+            if (Math.abs(diff) <= maxStep) return target;
+            return current + Math.sign(diff) * maxStep;
+        }
+
+        function getCatapultSpec() {
+            const catW = 150;
+            const catH = CONFIG.PLAYER_SIZE_W * 2.5;
+            // 母艦描画は ctx.rotate(-Math.PI/2) が掛かっているため
+            // ローカル座標 (lx, ly) → ワールド座標 (ly, -lx)
+            // ローカル root(80,0) → world(0,-80)、tip(230,0) → world(0,-230)
+            return {
+                rootX: 0,      // ワールドX：カタパルト根本
+                rootY: -80,    // ワールドY：カタパルト根本
+                tipX: 0,       // ワールドX：カタパルト先端
+                tipY: -(80 + catW), // ワールドY：カタパルト先端 = -230
+                width: catW,
+                height: catH,
+                halfH: catH / 2
+            };
+        }
 
         const entities = {
             enemies: [],
@@ -693,6 +853,48 @@
             });
         }
 
+        function spawnEnemyDropItems(x, y, baseVx = 0, baseVy = 0) {
+            const spawnItem = (kind, sprite, exp, heal, sizeMult = 1) => {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 3 + Math.random() * 4;
+                entities.gems.push({
+                    x: x,
+                    y: y,
+                    vx: baseVx * 0.35 + Math.cos(angle) * speed,
+                    vy: baseVy * 0.35 + Math.sin(angle) * speed,
+                    kind: kind,
+                    exp: exp,
+                    heal: heal,
+                    locked: false,
+                    speed: CONFIG.GEM_MAGNET_BASE_SPEED,
+                    sprite: sprite,
+                    sizeMult: sizeMult
+                });
+            };
+
+            spawnItem('EXP', SpriteCache.gem, CONFIG.GEM_BASE_EXP, 0, 1.0);
+
+            if (Math.random() < CONFIG.HEAL_ITEM_DROP_CHANCE) {
+                spawnItem('HEAL', SpriteCache.gemHeal, 0, CONFIG.HEAL_ITEM_AMOUNT, 1.0);
+            }
+
+            if (Math.random() < CONFIG.BIG_EXP_DROP_CHANCE) {
+                spawnItem('BIG_EXP', SpriteCache.gemBigExp, CONFIG.GEM_BASE_EXP * CONFIG.BIG_EXP_MULT, 0, CONFIG.BIG_EXP_SIZE_MULT);
+            }
+        }
+
+        function clearAllEnemiesInstantly() {
+            for (let i = entities.enemies.length - 1; i >= 0; i--) {
+                const e = entities.enemies[i];
+                spawnExplosion(e.x, e.y);
+                spawnDeathDebris(e.x, e.y, getEnemyColor(e), e.vx, e.vy);
+                entities.enemies.splice(i, 1);
+            }
+            entities.enemyBullets.length = 0;
+            GAME.killCount = Math.max(GAME.killCount, CONFIG.MISSION_QUOTA);
+            GAME.quotaReminderTimer = 0;
+        }
+
         function getEnemyColor(e) {
             if (e.personality === 'RAMMER') return CONFIG.COLOR_ENEMY_RAMMER;
             if (e.personality === 'SNIPER') return CONFIG.COLOR_ENEMY_SNIPER;
@@ -704,19 +906,7 @@
             let enemyColor = getEnemyColor(e);
             spawnExplosion(e.x, e.y);
             spawnDeathDebris(e.x, e.y, enemyColor, e.vx, e.vy);
-
-            // 経験値アイテムの飛び出し（デブリと同様）
-            const gemAngle = Math.random() * Math.PI * 2;
-            const gemSpeed = 3 + Math.random() * 4;
-            entities.gems.push({
-                x: e.x,
-                y: e.y,
-                vx: Math.cos(gemAngle) * gemSpeed,
-                vy: Math.sin(gemAngle) * gemSpeed,
-                exp: CONFIG.GEM_BASE_EXP,
-                locked: false,
-                speed: CONFIG.GEM_MAGNET_BASE_SPEED
-            });
+            spawnEnemyDropItems(e.x, e.y, e.vx, e.vy);
 
             GAME.credits += 100;
             GAME.killCount++;
@@ -735,6 +925,8 @@
         function triggerPlayerDeath() {
             if (GAME.isPlayerDying) return;
             GAME.isPlayerDying = true;
+            player.vx = 0;
+            player.vy = 0;
 
             Cielo.play("傭兵さん！傭兵さーーん！");
 
@@ -808,12 +1000,9 @@
             document.getElementById('credits-panel').style.display = GAME.launchSequence ? 'none' : 'block';
 
             // --- Phase 2: 物理と操作 (Drift Physics) ---
-            let ax = 0, ay = 0;
-            if (!GAME.isPlayerDying && !player.isLandingSequence && !GAME.launchSequence) {
-                if (keys['KeyW'] || keys['ArrowUp']) ay -= 1;
-                if (keys['KeyS'] || keys['ArrowDown']) ay += 1;
-                if (keys['KeyA'] || keys['ArrowLeft']) ax -= 1;
-                if (keys['KeyD'] || keys['ArrowRight']) ax += 1;
+            const canControl = !GAME.isPlayerDying && !player.isLandingSequence && !GAME.launchSequence;
+            if (canControl) {
+                playerStats.handling = CONFIG.PLAYER_BASE_HANDLING + (playerStats.upgrades.handling - 1) * 0.015;
             }
 
             // --- ブースター (SHIFT) ---
@@ -830,11 +1019,32 @@
             }
             if (player.boosterCooldown > 0) player.boosterCooldown--;
 
-            if (!player.isLandingSequence && !GAME.launchSequence) {
-                if (ax !== 0 || ay !== 0) {
-                    player.bodyAngle = Math.atan2(ay, ax);
-                    player.vx += Math.cos(player.bodyAngle) * playerStats.moveSpeed;
-                    player.vy += Math.sin(player.bodyAngle) * playerStats.moveSpeed;
+            if (canControl) {
+                const turnLeft = keys['KeyA'] || keys['ArrowLeft'];
+                const turnRight = keys['KeyD'] || keys['ArrowRight'];
+                const hasManualTurn = turnLeft || turnRight;
+
+                if (turnLeft) {
+                    player.bodyAngle -= playerStats.handling;
+                }
+                if (turnRight) {
+                    player.bodyAngle += playerStats.handling;
+                }
+
+                if (GAME.controlMode === 'SUBSPACE') {
+                    player.turretAngle = player.bodyAngle;
+                } else {
+                    const mouseAngle = Math.atan2(mouse.y - GAME.height / 2, mouse.x - GAME.width / 2);
+                    player.turretAngle = mouseAngle;
+                }
+
+                let thrust = 0;
+                if (keys['KeyW'] || keys['ArrowUp']) thrust += playerStats.moveSpeed;
+                if (keys['KeyS'] || keys['ArrowDown']) thrust -= playerStats.moveSpeed * 0.5;
+
+                if (thrust !== 0) {
+                    player.vx += Math.cos(player.bodyAngle) * thrust;
+                    player.vy += Math.sin(player.bodyAngle) * thrust;
                 }
 
                 // Friction (摩擦係数)
@@ -850,52 +1060,109 @@
 
                 player.x += player.vx;
                 player.y += player.vy;
-            } else if (player.isLandingSequence) {
-                // 着艦シネマティックシーケンス挙動
-                player.vx = 0;
-                player.vy = 0;
-
-                // じりじりと着艦中心軸(0)と根本位置(-90)へ移動
-                player.x += (0 - player.x) * 0.05;
-                player.y += (-90 - player.y) * 0.05;
-
-                // 北向き(-Math.PI / 2)へ徐々に回転
-                const targetAngle = -Math.PI / 2;
-
-                let diffBody = targetAngle - player.bodyAngle;
-                while (diffBody < -Math.PI) diffBody += Math.PI * 2;
-                while (diffBody > Math.PI) diffBody -= Math.PI * 2;
-                player.bodyAngle += diffBody * 0.05;
-
-                let diffTurret = targetAngle - player.turretAngle;
-                while (diffTurret < -Math.PI) diffTurret += Math.PI * 2;
-                while (diffTurret > Math.PI) diffTurret -= Math.PI * 2;
-                player.turretAngle += diffTurret * 0.05;
-
-                // 完了判定 (十分に近づいた場合)
-                if (Math.abs(player.x) < 0.5 && Math.abs(player.y - (-90)) < 0.5 &&
-                    Math.abs(diffBody) < 0.02 && Math.abs(diffTurret) < 0.02) {
-
-                    player.x = 0;
-                    player.y = -90;
-                    player.bodyAngle = targetAngle;
-                    player.turretAngle = targetAngle;
-
-                    if (!GAME.isResultTriggered) {
-                        GAME.isResultTriggered = true;
-                        Cielo.play("カタパルトロック。接続完了ですー！");
-                        setTimeout(() => {
-                            GAME.state = 'GAMEOVER';
-                            document.getElementById('game-over-screen').style.display = 'block';
-                            document.querySelector('#game-over-screen h1').innerText = 'MISSION CLEAR';
-                            document.querySelector('#game-over-screen h1').style.color = '#0ff';
-                        }, 2500);
-                    }
-                }
             } else if (GAME.launchSequence) {
                 // 発進カウントダウン中（GO! のみ移動する）
                 player.x += player.vx;
                 player.y += player.vy;
+            } else if (player.isLandingSequence) {
+                const cat = getCatapultSpec();
+                const targetDown = Math.PI / 2;  // +Y方向（先端→根本）
+                const targetUp = -Math.PI / 2;   // -Y方向（発進方向）
+                const approachSpeed = 0.08;
+                const towSpeed = 0.025;
+                const rotateSpeed = 0.04;
+
+                player.vx = 0;
+                player.vy = 0;
+
+                if (player.landingPhase === 'TIP_LAND') {
+                    player.x += (cat.tipX - player.x) * approachSpeed;
+                    player.y += (cat.tipY - player.y) * approachSpeed;
+                    player.bodyAngle = rotateTowards(player.bodyAngle, targetDown, 0.08);
+                    player.turretAngle = player.bodyAngle;
+
+                    if (Math.abs(player.x - cat.tipX) < 0.6 && Math.abs(player.y - cat.tipY) < 0.6 && Math.abs(normalizeAngle(player.bodyAngle - targetDown)) < 0.04) {
+                        player.x = cat.tipX;
+                        player.y = cat.tipY;
+                        player.bodyAngle = targetDown;
+                        player.turretAngle = targetDown;
+                        player.leftTrailHistory = [];
+                        player.rightTrailHistory = [];
+                        if (player.landingForClear) {
+                            Cielo.play("カタパルトロック。着艦完了です");
+                        } else {
+                            Cielo.play("着艦シーケンス開始します");
+                        }
+                        player.landingPhase = 'TOW_TO_ROOT';
+                    }
+                } else if (player.landingPhase === 'TOW_TO_ROOT') {
+                    player.x += (cat.rootX - player.x) * towSpeed;
+                    player.y += (cat.rootY - player.y) * towSpeed;
+                    player.bodyAngle = targetDown;
+                    player.turretAngle = targetDown;
+
+                    if (Math.abs(player.x - cat.rootX) < 0.6 && Math.abs(player.y - cat.rootY) < 0.6) {
+                        player.x = cat.rootX;
+                        player.y = cat.rootY;
+                        player.landingPhase = 'ROTATE_UP';
+                    }
+                } else if (player.landingPhase === 'ROTATE_UP') {
+                    player.x = cat.rootX;
+                    player.y = cat.rootY;
+                    player.bodyAngle = rotateTowards(player.bodyAngle, targetUp, rotateSpeed);
+                    player.turretAngle = rotateTowards(player.turretAngle, targetUp, rotateSpeed);
+
+                    if (Math.abs(normalizeAngle(player.bodyAngle - targetUp)) < 0.04 && Math.abs(normalizeAngle(player.turretAngle - targetUp)) < 0.04) {
+                        player.bodyAngle = targetUp;
+                        player.turretAngle = targetUp;
+                        if (player.landingForClear) {
+                            Cielo.play("おかえりなさい。お疲れ様でした！");
+                            player.landingPhase = 'WAIT_CLEAR';
+                            player.landingTimer = 180;
+                        } else {
+                            // 補給着艦：HPが最大か否かでメッセージ分岐
+                            if (playerStats.hp >= playerStats.maxHp) {
+                                Cielo.play("あれ？何しに戻ってきたんですか？ さあ、お仕事が待ってますよ！");
+                                player.needsResupplyVisual = false;
+                                player.landingTimer = 60; // 1秒で追い出し
+                            } else {
+                                Cielo.play("お疲れ様でした。補給は任せてください");
+                                playerStats.hp = playerStats.maxHp;
+                                player.needsResupplyVisual = true;
+                                player.landingTimer = 120; // 修理があるときは2秒
+                            }
+                            player.landingPhase = 'RESUPPLY';
+                        }
+                    }
+                } else if (player.landingPhase === 'RESUPPLY') {
+                    player.x = cat.rootX;
+                    player.y = cat.rootY;
+                    player.bodyAngle = targetUp;
+                    player.turretAngle = targetUp;
+                    player.landingTimer--;
+                    if (player.landingTimer <= 0) {
+                        // 補給完了→再発艦カウントダウン開始
+                        player.isLandingSequence = false;
+                        player.landingPhase = 'NONE';
+                        player.vx = 0;
+                        player.vy = 0;
+                        GAME.launchSequence = true;
+                        GAME.launchTimer = 0;
+                    }
+                } else if (player.landingPhase === 'WAIT_CLEAR') {
+                    player.x = cat.rootX;
+                    player.y = cat.rootY;
+                    player.bodyAngle = targetUp;
+                    player.turretAngle = targetUp;
+                    player.landingTimer--;
+                    if (player.landingTimer <= 0 && !GAME.isResultTriggered) {
+                        GAME.isResultTriggered = true;
+                        GAME.state = 'GAMEOVER';
+                        document.getElementById('game-over-screen').style.display = 'block';
+                        document.querySelector('#game-over-screen h1').innerText = 'MISSION CLEAR';
+                        document.querySelector('#game-over-screen h1').style.color = '#0ff';
+                    }
+                }
             }
 
             // 最も近い敵を探索（自動エイム用）
@@ -909,18 +1176,11 @@
                 }
             }
 
-            // 機体の回転 (マウス方向へ砲塔を向ける - 着艦及び発進シーケンス中以外のみ)
-            if (!player.isLandingSequence && !GAME.launchSequence) {
-                const dxMouse = mouse.x - GAME.width / 2;
-                const dyMouse = mouse.y - GAME.height / 2;
-                player.turretAngle = Math.atan2(dyMouse, dxMouse);
-            }
-
             // (Old particle emitter removed - now handled fully by ribbon trail)
 
             // --- ヒートゲージ＆自動エイム射撃ロジック ---
-            // ヒート管理のため、射撃は「左クリック or スペースキー」を押している間のみ作動（死亡・着艦演出時は撃てない）
-            const isFiringInput = !GAME.isPlayerDying && !player.isLandingSequence && (keys['Space'] || mouse.isDown);
+            // ヒート管理のため、射撃は「右クリック or スペースキー」を押している間のみ作動（死亡・着艦演出時は撃てない）
+            const isFiringInput = !GAME.isPlayerDying && !player.isLandingSequence && (keys['Space'] || mouse.rightDown);
 
             if (player.isOverheated) {
                 player.overheatTimer--;
@@ -948,13 +1208,14 @@
                         player.overheatTimer = CONFIG.HEAT_OVERHEAT_PENALTY;
                     }
 
+                    const fireAngle = GAME.controlMode === 'SUBSPACE' ? player.bodyAngle : player.turretAngle;
                     for (let i = 0; i < playerStats.bulletCount; i++) {
                         const spread = (i - (playerStats.bulletCount - 1) / 2) * CONFIG.BULLET_SPREAD_ANGLE;
                         entities.bullets.push({
-                            x: player.x + Math.cos(player.turretAngle) * (CONFIG.PLAYER_SIZE_W / 2),
-                            y: player.y + Math.sin(player.turretAngle) * (CONFIG.PLAYER_SIZE_W / 2),
-                            vx: Math.cos(player.turretAngle + spread) * CONFIG.BULLET_SPEED + player.vx * 0.5,
-                            vy: Math.sin(player.turretAngle + spread) * CONFIG.BULLET_SPEED + player.vy * 0.5,
+                            x: player.x + Math.cos(fireAngle) * (CONFIG.PLAYER_SIZE_W / 2),
+                            y: player.y + Math.sin(fireAngle) * (CONFIG.PLAYER_SIZE_W / 2),
+                            vx: Math.cos(fireAngle + spread) * CONFIG.BULLET_SPEED + player.vx * 0.5,
+                            vy: Math.sin(fireAngle + spread) * CONFIG.BULLET_SPEED + player.vy * 0.5,
                             life: CONFIG.BULLET_LIFE
                         });
                     }
@@ -964,21 +1225,21 @@
                 player.fireTimer = playerStats.fireRate;
             }
 
-            // --- ミサイル発射 (CTRL) ---
-            if (!GAME.isPlayerDying && !player.isLandingSequence && (keys['ControlLeft'] || keys['ControlRight']) && player.missileCooldown <= 0 && !player.isOverheated) {
+            // --- ミサイル発射 (E) ---
+            if (!GAME.isPlayerDying && !player.isLandingSequence && keys['KeyE'] && player.missileCooldown <= 0 && !player.isOverheated) {
                 player.missileCooldown = CONFIG.MISSILE_COOLDOWN;
 
                 // ロックオン処理 (前方90度)
                 let target = null;
                 let minDistToM = Infinity;
+                const fireAngle = GAME.controlMode === 'SUBSPACE' ? player.bodyAngle : player.turretAngle;
                 entities.enemies.forEach(e => {
                     const dx = e.x - player.x;
                     const dy = e.y - player.y;
                     const dist = Math.hypot(dx, dy);
                     const angleToEnemy = Math.atan2(dy, dx);
                     // 角度差を計算
-                    let diff = Math.abs(angleToEnemy - player.turretAngle);
-                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    let diff = normalizeAngle(angleToEnemy - fireAngle);
                     diff = Math.abs(diff);
 
                     if (diff < Math.PI / 4 && dist < 1200) {
@@ -992,9 +1253,9 @@
                 entities.missiles.push({
                     x: player.x,
                     y: player.y,
-                    vx: player.vx + Math.cos(player.turretAngle) * 5,
-                    vy: player.vy + Math.sin(player.turretAngle) * 5,
-                    angle: player.turretAngle,
+                    vx: player.vx + Math.cos(fireAngle) * 5,
+                    vy: player.vy + Math.sin(fireAngle) * 5,
+                    angle: fireAngle,
                     target: target,
                     life: 300,
                     speed: CONFIG.MISSILE_SPEED,
@@ -1005,14 +1266,16 @@
             if (player.missileCooldown > 0) player.missileCooldown--;
 
             // --- Phase 3: 多重スクロール背景座標更新 ---
-            stars.forEach(s => {
-                s.x -= player.vx * s.layer.rate;
-                s.y -= player.vy * s.layer.rate;
-                if (s.x < 0) s.x += GAME.width;
-                if (s.x > GAME.width) s.x -= GAME.width;
-                if (s.y < 0) s.y += GAME.height;
-                if (s.y > GAME.height) s.y -= GAME.height;
-            });
+            if (!GAME.isPlayerDying && GAME.state === 'PLAYING') {
+                stars.forEach(s => {
+                    s.x -= player.vx * s.layer.rate;
+                    s.y -= player.vy * s.layer.rate;
+                    if (s.x < 0) s.x += GAME.width;
+                    if (s.x > GAME.width) s.x -= GAME.width;
+                    if (s.y < 0) s.y += GAME.height;
+                    if (s.y > GAME.height) s.y -= GAME.height;
+                });
+            }
 
             // --- エンティティの更新 ---
             for (let i = entities.particles.length - 1; i >= 0; i--) {
@@ -1215,7 +1478,7 @@
                                     // 連鎖誘発爆発！
                                     spawnExplosion(e.x, e.y);
                                     spawnDeathDebris(e.x, e.y, enemyColor, e.vx, e.vy);
-                                    entities.gems.push({ x: e.x, y: e.y, exp: CONFIG.GEM_BASE_EXP, locked: false, speed: CONFIG.GEM_MAGNET_BASE_SPEED });
+                                    spawnEnemyDropItems(e.x, e.y, e.vx, e.vy);
                                     entities.enemies.splice(j, 1);
                                 }
                             }
@@ -1316,7 +1579,7 @@
 
             // --- Phase 4: 敵AIと衝突判定 ---
             // 敵のスポーン制御 (Y <= -1000 でのみ湧く)
-            if (entities.enemies.length < CONFIG.ENEMY_MAX_COUNT && Math.random() < CONFIG.ENEMY_SPAWN_BASE_RATE + (playerStats.level * CONFIG.ENEMY_SPAWN_LEVEL_MULT) && player.y <= CONFIG.SPAWN_TRIGGER_Y) {
+            if (GAME.debugEnemyRespawnEnabled && entities.enemies.length < CONFIG.ENEMY_MAX_COUNT && Math.random() < CONFIG.ENEMY_SPAWN_BASE_RATE + (playerStats.level * CONFIG.ENEMY_SPAWN_LEVEL_MULT) && player.y <= CONFIG.SPAWN_TRIGGER_Y) {
                 const spawnRadius = 300;
                 const angle = Math.random() * Math.PI * 2;
                 const dist = Math.random() * spawnRadius;
@@ -1732,8 +1995,9 @@
 
                 if (g.locked) {
                     g.speed += CONFIG.GEM_MAGNET_ACCEL; // 加速度を加算
-                    g.x += (gdx / dist) * g.speed;
-                    g.y += (gdy / dist) * g.speed;
+                    const safeDist = Math.max(dist, 0.0001);
+                    g.x += (gdx / safeDist) * g.speed;
+                    g.y += (gdy / safeDist) * g.speed;
                 } else {
                     // 敵撃破時の飛び出し＆減速挙動 (デブリと同様に)
                     if (g.vx !== undefined && g.vy !== undefined) {
@@ -1745,37 +2009,55 @@
                 }
 
                 if (dist < CONFIG.GEM_COLLECT_RADIUS) {
-                    playerStats.exp += g.exp;
+                    if (g.kind === 'HEAL') {
+                        playerStats.hp = Math.min(playerStats.maxHp, playerStats.hp + (g.heal || CONFIG.HEAL_ITEM_AMOUNT));
+                    } else {
+                        playerStats.exp += g.exp;
+                        checkLevelUp();
+                    }
                     entities.gems.splice(i, 1);
-                    checkLevelUp();
                 }
             }
 
-            // --- 母艦着艦・ミッションクリア判定 ＆ リマインダー ---
+            // --- ミッション達成リマインダー ---
             if (GAME.killCount >= CONFIG.MISSION_QUOTA && !GAME.isMissionClear && !GAME.isPlayerDying) {
-                // 15秒間帰還しなかった場合のリマインダー (900フレーム周期)
                 GAME.quotaReminderTimer = (GAME.quotaReminderTimer || 0) + 1;
                 if (GAME.quotaReminderTimer >= 900) {
                     Cielo.play("ノルマ達成ですー、無理せず帰ってきてくださいね");
                     GAME.quotaReminderTimer = 0;
                 }
+            }
 
-                const catW = 150;
-                const catH = CONFIG.PLAYER_SIZE_W * 2.5; // 横幅を2.5倍に拡大
-                const msX = CONFIG.MOTHERSHIP_X;
-                const msY = CONFIG.MOTHERSHIP_Y;
+            // --- 着艦判定（出撃後は常時有効）---
+            if (!player.isLandingSequence && !GAME.isPlayerDying && !GAME.isMissionClear && !GAME.launchSequence) {
+                const cat = getCatapultSpec();
+                const isTargeted = entities.enemies.length > 0;
 
-                const relX = player.x - msX;
-                const relY = player.y - msY;
-
-                // カタパルトの範囲 (X: -37.5 ～ +37.5, Y: -230 ～ -80)
-                if (relX >= -catH / 2 && relX <= catH / 2 && relY <= -80 && relY >= -(80 + catW)) {
-                    if (Math.hypot(player.vx, player.vy) <= 5) {
-                        // 着艦成功
-                        player.isLandingSequence = true;
-                        GAME.isMissionClear = true;
-                        Cielo.play("おかえりなさい、お疲れ様でした！");
+                // 着艦不可（ターゲット中）かつ母艦半径200px以内に近づいたら警告
+                if (isTargeted) {
+                    const distToMs = Math.hypot(player.x - CONFIG.MOTHERSHIP_X, player.y - CONFIG.MOTHERSHIP_Y);
+                    GAME.landingBlockedTimer = (GAME.landingBlockedTimer || 0) - 1;
+                    if (distToMs <= 200 && GAME.landingBlockedTimer <= 0) {
+                        Cielo.play("敵機からターゲット中です！排除しないと着艦できません！");
+                        GAME.landingBlockedTimer = 300; // 約5秒間は再生しない
                     }
+                } else {
+                    GAME.landingBlockedTimer = 0;
+                }
+
+                if (!isTargeted && Math.hypot(player.x - cat.tipX, player.y - cat.tipY) <= 50) {
+                    const isClearLanding = GAME.killCount >= CONFIG.MISSION_QUOTA;
+                    player.isLandingSequence = true;
+                    player.landingForClear = isClearLanding;
+                    if (isClearLanding) GAME.isMissionClear = true;
+                    player.landingPhase = 'TIP_LAND';
+                    player.landingTimer = 0;
+                    player.vx = 0;
+                    player.vy = 0;
+                    player.bodyAngle = Math.PI / 2;
+                    player.turretAngle = Math.PI / 2;
+                    player.leftTrailHistory = [];
+                    player.rightTrailHistory = [];
                 }
             }
 
@@ -1891,32 +2173,33 @@
             const statsHtml = `
                 <div class="stat-category">
                     <div class="stat-category-title">// HULL</div>
-                    <div class="stat-row"><span class="stat-label">INTEGRITY</span><span class="stat-value">Lv${playerStats.level} ${Math.floor(playerStats.hp)}/${playerStats.maxHp}</span></div>
-                    <div class="stat-row"><span class="stat-label">PHY. RESIST</span><span class="stat-value">Lv1 100</span></div>
-                    <div class="stat-row"><span class="stat-label">HEAT RESIST</span><span class="stat-value">Lv1 100</span></div>
-                    <div class="stat-row"><span class="stat-label">EXP. RESIST</span><span class="stat-value">Lv1 100</span></div>
-                    <div class="stat-row"><span class="stat-label">HEAT CAP.</span><span class="stat-value">Lv1 ${CONFIG.HEAT_MAX}</span></div>
+                    <div class="stat-row"><span class="stat-label">INTEGRITY</span><span class="stat-level">Lv${playerStats.level}</span><span class="stat-value">${Math.floor(playerStats.hp)}/${playerStats.maxHp}</span></div>
+                    <div class="stat-row"><span class="stat-label">PHY. RESIST</span><span class="stat-level">Lv1</span><span class="stat-value">100</span></div>
+                    <div class="stat-row"><span class="stat-label">HEAT RESIST</span><span class="stat-level">Lv1</span><span class="stat-value">100</span></div>
+                    <div class="stat-row"><span class="stat-label">EXP. RESIST</span><span class="stat-level">Lv1</span><span class="stat-value">100</span></div>
+                    <div class="stat-row"><span class="stat-label">HEAT CAP.</span><span class="stat-level">Lv1</span><span class="stat-value">${CONFIG.HEAT_MAX}</span></div>
                 </div>
                 <div class="stat-category">
                     <div class="stat-category-title">// VULCAN</div>
-                    <div class="stat-row"><span class="stat-label">PROJECTILES</span><span class="stat-value">Lv${playerStats.upgrades.bulletCount} ${playerStats.bulletCount}</span></div>
-                    <div class="stat-row"><span class="stat-label">FIRE RATE</span><span class="stat-value">Lv${playerStats.upgrades.fireRate} ${shotsPerSec}/s</span></div>
-                    <div class="stat-row"><span class="stat-label">HEAT EFF.</span><span class="stat-value">Lv1 100</span></div>
+                    <div class="stat-row"><span class="stat-label">PROJECTILES</span><span class="stat-level">Lv${playerStats.upgrades.bulletCount}</span><span class="stat-value">${playerStats.bulletCount}</span></div>
+                    <div class="stat-row"><span class="stat-label">FIRE RATE</span><span class="stat-level">Lv${playerStats.upgrades.fireRate}</span><span class="stat-value">${shotsPerSec}/s</span></div>
+                    <div class="stat-row"><span class="stat-label">HEAT EFF.</span><span class="stat-level">Lv1</span><span class="stat-value">100</span></div>
                 </div>
                 <div class="stat-category">
                     <div class="stat-category-title">// THRUSTER</div>
-                    <div class="stat-row"><span class="stat-label">MAX SPEED</span><span class="stat-value">Lv${playerStats.upgrades.moveSpeed} ${(playerStats.maxSpeed).toFixed(1)}</span></div>
-                    <div class="stat-row"><span class="stat-label">ACCEL</span><span class="stat-value">Lv${playerStats.upgrades.moveSpeed} ${(playerStats.moveSpeed).toFixed(2)}</span></div>
-                    <div class="stat-row"><span class="stat-label">HANDLING</span><span class="stat-value">Lv1 100</span></div>
+                    <div class="stat-row"><span class="stat-label">MAX SPEED</span><span class="stat-level">Lv${playerStats.upgrades.moveSpeed}</span><span class="stat-value">${(playerStats.maxSpeed).toFixed(1)}</span></div>
+                    <div class="stat-row"><span class="stat-label">ACCEL</span><span class="stat-level">Lv${playerStats.upgrades.moveSpeed}</span><span class="stat-value">${(playerStats.moveSpeed).toFixed(2)}</span></div>
+                    <div class="stat-row"><span class="stat-label">HANDLING</span><span class="stat-level">Lv${playerStats.upgrades.handling}</span><span class="stat-value">${(playerStats.handling * 60).toFixed(1)}°/s</span></div>
+                    <div class="stat-row"><span class="stat-label">CTRL MODE</span><span class="stat-level">Lv-</span><span class="stat-value">${GAME.controlMode}</span></div>
                 </div>
                 <div class="stat-category">
                     <div class="stat-category-title">// SHIELD SYS</div>
-                    <div class="stat-row"><span class="stat-label">ENERGY</span><span class="stat-value">Lv1 100/100</span></div>
-                    <div class="stat-row"><span class="stat-label">STRENGTH</span><span class="stat-value">Lv1 100</span></div>
+                    <div class="stat-row"><span class="stat-label">ENERGY</span><span class="stat-level">Lv1</span><span class="stat-value">100/100</span></div>
+                    <div class="stat-row"><span class="stat-label">STRENGTH</span><span class="stat-level">Lv1</span><span class="stat-value">100</span></div>
                 </div>
                 <div class="stat-category">
                     <div class="stat-category-title">// ANCHOR GARAGE</div>
-                    <div class="stat-row"><span class="stat-label">HULL INTEGRITY</span><span class="stat-value">Lv1 1000/1000</span></div>
+                    <div class="stat-row"><span class="stat-label">HULL INTEGRITY</span><span class="stat-level">Lv1</span><span class="stat-value">1000/1000</span></div>
                 </div>
             `;
             document.getElementById('stats-panel').innerHTML = statsHtml;
@@ -1978,6 +2261,15 @@
             ctx.fill();
             ctx.stroke();
 
+            // 居住区の窓明かり（中に人がいる気配）
+            ctx.fillStyle = '#ffffaa';
+            ctx.globalAlpha = 0.8;
+            for (let i = 0; i < 3; i++) {
+                ctx.fillRect(-100 + i * 25, -62, 8, 4);
+                ctx.fillRect(-100 + i * 25, 58, 8, 4);
+            }
+            ctx.globalAlpha = 1.0;
+
             // 補助モジュール1 (上側)
             ctx.fillStyle = '#222d36';
             ctx.fillRect(-80, -90, 60, 20);
@@ -1995,10 +2287,11 @@
             ctx.lineWidth = 3;
             ctx.stroke();
 
-            // コアの発光
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
+            // コアの発光 (ゆっくりと脈動させる)
+            const pulse = Math.sin(Date.now() / 1000) * 0.5 + 0.5;
+            ctx.fillStyle = `rgba(0, 255, 255, ${0.1 + pulse * 0.1})`;
             ctx.beginPath();
-            ctx.arc(-20, 0, 35, 0, Math.PI * 2);
+            ctx.arc(-20, 0, 35 + pulse * 5, 0, Math.PI * 2);
             ctx.fill();
             ctx.fillStyle = '#0ff';
             ctx.beginPath();
@@ -2049,8 +2342,48 @@
 
             ctx.restore();
 
+            // --- ランディングエリア表示（着艦中・発艦中・ターゲット中・クリア後は非表示）---
+            if (!player.isLandingSequence && !GAME.launchSequence && !GAME.isMissionClear && entities.enemies.length === 0) {
+                const lcat = getCatapultSpec();
+                const landingColor = 'rgba(0, 220, 100, 0.18)';
+                const landingStroke = 'rgba(0, 220, 100, 0.55)';
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(lcat.tipX, lcat.tipY, 50, 0, Math.PI * 2);
+                ctx.fillStyle = landingColor;
+                ctx.fill();
+                ctx.strokeStyle = landingStroke;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.fillStyle = landingStroke;
+                ctx.font = 'bold 11px Courier New';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText('LANDING AREA', lcat.tipX, lcat.tipY - 54);
+                ctx.restore();
+            }
+
+            // --- 補給中のステータス表示 ---
+            if (player.isLandingSequence && player.landingPhase === 'RESUPPLY' && player.needsResupplyVisual) {
+                ctx.save();
+                ctx.fillStyle = '#0ff';
+                ctx.font = 'bold 14px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText('REPAIRING & RESUPPLYING...', player.x, player.y - 40);
+                // ゲージの簡易表示
+                ctx.strokeStyle = '#0ff';
+                ctx.strokeRect(player.x - 50, player.y - 30, 100, 6);
+                const progress = (120 - player.landingTimer) / 120;
+                ctx.fillRect(player.x - 50, player.y - 30, 100 * progress, 6);
+                ctx.restore();
+            }
+
             entities.gems.forEach(g => {
-                ctx.drawImage(SpriteCache.gem, g.x - SpriteCache.gem.width / 2, g.y - SpriteCache.gem.height / 2);
+                let sprite = SpriteCache.gem;
+                if (g.kind === 'HEAL') sprite = SpriteCache.gemHeal;
+                if (g.kind === 'BIG_EXP') sprite = SpriteCache.gemBigExp;
+                const drawSize = sprite.width;
+                ctx.drawImage(sprite, g.x - drawSize / 2, g.y - drawSize / 2);
             });
 
             entities.particles.forEach(p => {
@@ -2370,7 +2703,7 @@
             // ----------------------------------------
             // プレイヤー中心レーダーと敵方向マーカー描画
             // ----------------------------------------
-            if (!GAME.isPlayerDying && !GAME.launchSequence) {
+            if (!GAME.isPlayerDying && !GAME.launchSequence && !player.isLandingSequence) {
                 ctx.save();
                 ctx.translate(GAME.width / 2, GAME.height / 2);
 
@@ -2573,6 +2906,11 @@
                 };
                 const coordText = `- ${formatCoord(player.x)}.${formatCoord(player.y)} -`;
                 ctx.fillText(coordText, 0, 0);
+
+                const speedKms = ((Math.hypot(player.vx, player.vy) * 60) / 1000).toFixed(1);
+                ctx.font = 'bold 14px Courier New';
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.9)';
+                ctx.fillText(`${speedKms}km/s`, 0, 18);
                 ctx.restore();
 
                 ctx.restore();
