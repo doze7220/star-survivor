@@ -1,5 +1,44 @@
 const changelog = [
   {
+    version: "v0.3.1 (Alpha5 Logo Typography)",
+    date: "2026-05-19",
+    description: "Title logo typographic refinements: V scale-up and D chromatic aberration.",
+    details: [
+      "【演出】タイトルロゴ『VANGUARDRIFTER』の頭文字『V』を他の文字より大きく(70px)描画し、ロゴ全体の視覚的重心を強調",
+      "【演出】中央の文字『D』をNeon Cyanの位置から左上・右下へ5pxずらしたOrb Magenta／Enemy Redの半透明レイヤーで重ね描きし、慣性ドリフトのアナグリフ(色収差)効果を実装",
+      "【演出】V〜Rの各パーツをmeasureTextで幅を計測してleft揃えで順次描画し、文字間隔を正確に維持"
+    ]
+  },
+  {
+    version: "v0.3.0 (Outgame & UI Alpha)",
+    date: "2026-05-19",
+    description: "Title screen, result screen (expense invoice), canvas-based level-up UI, and full keyboard navigation.",
+    details: [
+      "【タイトル】タイトル画面を実装。3階層の星屑スクロール・遠景爆発フレーバー・PRESS ANY BUTTON点滅表示",
+      "【タイトル】任意キー入力でSORTIE INITIATED高速明滅→ホワイトアウトフラッシュ→自機上昇Ease-In出撃演出",
+      "【リザルト】経費精算UIを実装。MISSION ACCOMPLISHED / FAILED ヘッダー・明細0.5秒インターバル表示",
+      "【リザルト】収入(基本報酬・撃破バウンティ・タイムボーナス)と支出(修理費・緊急回収費)を自動計算・表示",
+      "【リザルト】NET PROFITを大きく表示。プラスならNeon Cyan、マイナスならEnemy Redで強調",
+      "【リザルト】シエロ通信メッセージをタイプライター演出で表示(条件分岐5種)",
+      "【リザルト】決済スタンプ([ SETTLED ] / [ DEBT EXECUTED ])を斜め-15度・3倍→等倍の急縮小アニメーションで押印",
+      "【リザルト】スタンプ押印瞬間に画面全体シェイク演出を実装",
+      "【リザルト】RETURN TO GARAGE / RETRY MISSION のキーボード＋マウスハイブリッド選択UIを実装",
+      "【レベルアップ】DOM要素を廃止しCanvas描画へ完全移行。カード選択・カーソル▼浮遊・決定時ドロップアウト演出",
+      "【レベルアップ】決定カードが中央吸込み・非選択カード落下・▼突き刺しパーティクル爆発演出を実装",
+      "【UI】ゲーム状態管理をTITLE / PLAYING / LEVEL_UP / RESULTの4ステートマシンに整理",
+      "【計測】GAME.damageTaken(累積被弾)とGAME.operationTime(プレイ時間)をリザルト計算に反映"
+    ]
+  },
+  {
+    version: "v0.2.3 (Missile Fix)",
+    date: "2026-05-19",
+    description: "Fixed missile explosions incorrectly triggering game over.",
+    details: [
+      "【バグ修正】ミサイル着弾時のspawnExplosion呼び出しでisPlayer=trueが誤って渡されており、爆発消滅のタイミングでゲームオーバー(initResultScreen)が発火する不具合を修正",
+      "【バグ修正】spawnExplosion(m.x, m.y, true) → spawnExplosion(m.x, m.y, false) に変更"
+    ]
+  },
+  {
     version: "v0.2.2 (Mothership Polish)",
     date: "2026-05-18",
     description: "Visual enhancements to the mothership to increase player attachment.",
