@@ -1,5 +1,16 @@
 const changelog = [
   {
+    version: "v0.3.2 (Subspace Drift & Vector Stream)",
+    date: "2026-05-20",
+    description: "Implement SUBSPACE DRIFT PROTOCOL and VECTOR PATH STREAM PROTOCOL for player and enemies.",
+    details: [
+      "【物理】機体（自機・敵機）の移動物理を「慣性ブレンド方式」に刷新し、ドリフト（横滑り）を伴う重厚な挙動を実現",
+      "【描画】リボントレイル（スラスター軌跡）を単一のベクターパス接続による一筆書き描画に最適化し、滑らかな高輝度ラインへ変更",
+      "【演出】自機が一定速度を超えた際、進行方向の逆向きへ流れる「風トレイル（スリップストリーム）」が動的に生成される機能を追加",
+      "【設定】各種物理パラメータ（摩擦、加速力、最高速度など）をドリフト仕様に合わせて再調整"
+    ]
+  },
+  {
     version: "v0.3.1 (Alpha5 Logo Typography)",
     date: "2026-05-19",
     description: "Title logo typographic refinements: V scale-up and D chromatic aberration.",
