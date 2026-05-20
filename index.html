@@ -1776,7 +1776,7 @@ DEBUG - 1:HP全快  2:リスポーン切替  3:敵全滅  4:ミッション強�
                 }
                 m.life--;
                 if (hit || m.life <= 0) {
-                    spawnExplosion(m.x, m.y, true);
+                    spawnExplosion(m.x, m.y, false);
                     entities.missiles.splice(i, 1);
                 }
             }
@@ -2508,16 +2508,85 @@ DEBUG - 1:HP全快  2:リスポーン切替  3:敵全滅  4:ミッション強�
                 }
             });
 
-            // メインロゴ
-            ctx.save();
-            ctx.shadowColor = '#0ff';
-            ctx.shadowBlur = 20;
-            ctx.fillStyle = '#0ff';
-            ctx.font = 'bold 54px Courier New';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('VANGUARDRIFTER', GAME.width / 2, GAME.height * 0.25);
-            ctx.restore();
+            // ─── メインロゴ (タイポグラフィ強化版) ───
+            // V : 大きく描画 (D の色収差込みの全高に合わせる)
+            // D : 色収差 (クロマティックアベレーション) 演出
+            {
+                const logoY = GAME.height * 0.25;
+                const mainFont = 'bold 54px Courier New';
+                const vFont    = 'bold 70px Courier New';
+
+                // 各パーツ幅を計測
+                ctx.font = vFont;
+                const vW = ctx.measureText('V').width;
+                ctx.font = mainFont;
+                const anguarW  = ctx.measureText('ANGUAR').width;
+                const dW       = ctx.measureText('D').width;
+                const rifterW  = ctx.measureText('RIFTER').width;
+
+                const totalW = vW + anguarW + dW + rifterW;
+                let curX = GAME.width / 2 - totalW / 2;
+
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+
+                // ── V (スケールアップ) ──
+                ctx.save();
+                ctx.font = vFont;
+                ctx.fillStyle = '#0ff';
+                ctx.shadowColor = '#0ff';
+                ctx.shadowBlur = 22;
+                ctx.fillText('V', curX, logoY);
+                ctx.restore();
+                curX += vW;
+
+                // ── ANGUAR ──
+                ctx.save();
+                ctx.font = mainFont;
+                ctx.fillStyle = '#0ff';
+                ctx.shadowColor = '#0ff';
+                ctx.shadowBlur = 18;
+                ctx.fillText('ANGUAR', curX, logoY);
+                ctx.restore();
+                curX += anguarW;
+
+                // ── D : 色収差 (アナグリフ) ──
+                const aberOffset = 5;
+                ctx.font = mainFont;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                // 左上 : Orb Magenta 半透明
+                ctx.save();
+                ctx.globalAlpha = 0.55;
+                ctx.fillStyle = '#ff00ff';
+                ctx.shadowBlur = 0;
+                ctx.fillText('D', curX - aberOffset, logoY - aberOffset);
+                ctx.restore();
+                // 右下 : Enemy Red 半透明
+                ctx.save();
+                ctx.globalAlpha = 0.55;
+                ctx.fillStyle = '#ff0044';
+                ctx.shadowBlur = 0;
+                ctx.fillText('D', curX + aberOffset, logoY + aberOffset);
+                ctx.restore();
+                // 中央 : Neon Cyan (メイン)
+                ctx.save();
+                ctx.fillStyle = '#0ff';
+                ctx.shadowColor = '#0ff';
+                ctx.shadowBlur = 18;
+                ctx.fillText('D', curX, logoY);
+                ctx.restore();
+                curX += dW;
+
+                // ── RIFTER ──
+                ctx.save();
+                ctx.font = mainFont;
+                ctx.fillStyle = '#0ff';
+                ctx.shadowColor = '#0ff';
+                ctx.shadowBlur = 18;
+                ctx.fillText('RIFTER', curX, logoY);
+                ctx.restore();
+            }
 
             // サブタイトル
             ctx.fillStyle = '#fff';
@@ -2818,6 +2887,182 @@ DEBUG - 1:HP全快  2:リスポーン切替  3:敵全滅  4:ミッション強�
                     ctx.restore();
                 }
             });
+        }
+
+        function drawResultScreen() {
+            const p = GAME.resultParams;
+            if (!p) return;
+
+            const cx = GAME.width / 2;
+            const shakeX = GAME.resultShakeTimer > 0 ? (Math.random() - 0.5) * 8 : 0;
+            const shakeY = GAME.resultShakeTimer > 0 ? (Math.random() - 0.5) * 8 : 0;
+
+            // ダークブルー背景
+            ctx.fillStyle = 'rgba(0, 20, 40, 0.92)';
+            ctx.fillRect(0, 0, GAME.width, GAME.height);
+
+            ctx.save();
+            ctx.translate(shakeX, shakeY);
+
+            // ─── ヘッダー ───
+            const headerY = GAME.height * 0.10;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = 'bold 28px Courier New';
+            if (p.isClear) {
+                ctx.fillStyle = '#0ff';
+                ctx.shadowColor = '#0ff';
+                ctx.shadowBlur = 15;
+                ctx.fillText('[ MISSION ACCOMPLISHED ]', cx, headerY);
+            } else {
+                ctx.fillStyle = '#ff0044';
+                ctx.shadowColor = '#ff0044';
+                ctx.shadowBlur = 15;
+                ctx.fillText('[ MISSION FAILED ]', cx, headerY);
+            }
+            ctx.shadowBlur = 0;
+
+            // 区切り線
+            ctx.strokeStyle = p.isClear ? 'rgba(0,255,255,0.4)' : 'rgba(255,0,68,0.4)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx - 320, headerY + 25);
+            ctx.lineTo(cx + 320, headerY + 25);
+            ctx.stroke();
+
+            // ─── 明細行 ───
+            const lineStartY = GAME.height * 0.18;
+            const lineH = 40;
+            const labelX = cx - 30;
+            const valueX = cx + 30;
+
+            const fmtC = (v) => {
+                const sign = v >= 0 ? '+' : '';
+                return sign + v.toLocaleString() + ' C';
+            };
+            const fmtTime = (secs) => {
+                const m = Math.floor(secs / 60).toString().padStart(2, '0');
+                const s = (secs % 60).toString().padStart(2, '0');
+                return m + ':' + s;
+            };
+
+            const lines = [
+                { label: 'OPERATION TIME',              value: fmtTime(p.operationTime), color: '#fff' },
+                { label: 'BASE REWARD',                 value: fmtC(p.baseReward),       color: '#0ff' },
+                { label: `KILL BOUNTY  x${p.score}`,   value: fmtC(p.bounty),            color: '#0ff' },
+                { label: 'TIME BONUS',                  value: fmtC(p.timeBonus),         color: '#0ff' },
+                { label: 'REPAIR COST',                 value: fmtC(-p.repairCost),       color: '#ff0044' },
+                { label: 'EMERGENCY RECOVERY FEE',      value: fmtC(-p.emergencyFee),     color: '#ff0044' },
+            ];
+
+            ctx.font = 'bold 17px Courier New';
+            ctx.textBaseline = 'middle';
+            for (let i = 0; i < lines.length; i++) {
+                if (i >= GAME.resultShowIndex) break;
+                const ln = lines[i];
+                const ly = lineStartY + i * lineH;
+                ctx.textAlign = 'right';
+                ctx.fillStyle = '#778899';
+                ctx.fillText(ln.label + ' :', labelX, ly);
+                ctx.textAlign = 'left';
+                ctx.fillStyle = ln.color;
+                ctx.fillText(ln.value, valueX, ly);
+            }
+
+            // ─── NET PROFIT ───
+            if (GAME.resultShowIndex >= 6) {
+                const netBaseY = lineStartY + lines.length * lineH + 10;
+
+                ctx.strokeStyle = p.netProfit >= 0 ? 'rgba(0,255,255,0.4)' : 'rgba(255,0,68,0.4)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(cx - 320, netBaseY - 8);
+                ctx.lineTo(cx + 320, netBaseY - 8);
+                ctx.stroke();
+
+                ctx.font = 'bold 14px Courier New';
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#778899';
+                ctx.fillText('NET PROFIT :', labelX, netBaseY + 20);
+                ctx.textAlign = 'left';
+                ctx.font = 'bold 34px Courier New';
+                const profitColor = p.netProfit >= 0 ? '#0ff' : '#ff0044';
+                ctx.fillStyle = profitColor;
+                ctx.shadowColor = profitColor;
+                ctx.shadowBlur = 12;
+                ctx.fillText(fmtC(p.netProfit), valueX, netBaseY + 20);
+                ctx.shadowBlur = 0;
+            }
+
+            // ─── シエロ通信（タイプライター） ───
+            if (GAME.resultShowIndex >= 6 && GAME.resultSieloText) {
+                const sieloY = GAME.height * 0.68;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = 'bold 15px Courier New';
+                ctx.fillStyle = '#00cc44';
+                const shown = GAME.resultSieloText.substring(0, GAME.resultSieloShowCharCount);
+                ctx.fillText('[ NAVI : シエロ ]  ' + shown, cx, sieloY);
+            }
+
+            // ─── スタンプ ───
+            if (GAME.resultStampTimer > 0) {
+                const stampY = lineStartY + lines.length * lineH * 0.55;
+                ctx.save();
+                ctx.translate(cx, stampY);
+                ctx.rotate(-15 * Math.PI / 180);
+                ctx.scale(GAME.resultStampScale, GAME.resultStampScale);
+
+                const stampText = p.netProfit >= 0 ? '[ SETTLED ]' : '[ DEBT EXECUTED ]';
+                const stampColor = p.netProfit >= 0 ? '#0ff' : '#ff0044';
+                ctx.font = 'bold 44px Courier New';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.globalAlpha = 0.82;
+                ctx.strokeStyle = stampColor;
+                ctx.lineWidth = 3 / Math.max(GAME.resultStampScale, 0.5);
+                const tw = ctx.measureText(stampText).width;
+                ctx.strokeRect(-tw / 2 - 12, -34, tw + 24, 68);
+                ctx.fillStyle = stampColor;
+                ctx.fillText(stampText, 0, 0);
+                ctx.globalAlpha = 1.0;
+                ctx.restore();
+            }
+
+            // ─── 選択ボタン ───
+            if (GAME.resultShowIndex >= 6) {
+                const btnY1 = GAME.height * 0.77;
+                const btnY2 = GAME.height * 0.84;
+                const blink = Math.floor(Date.now() / 500) % 2 === 0;
+
+                ctx.font = 'bold 18px Courier New';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                if (GAME.resultSelection === 0) {
+                    ctx.fillStyle = blink ? '#fff' : '#0ff';
+                    ctx.fillText('[ > ]  RETURN TO GARAGE', cx, btnY1);
+                } else {
+                    ctx.fillStyle = '#444';
+                    ctx.fillText('       RETURN TO GARAGE', cx, btnY1);
+                }
+
+                if (GAME.resultSelection === 1) {
+                    ctx.fillStyle = blink ? '#fff' : '#0ff';
+                    ctx.fillText('[ > ]  RETRY MISSION', cx, btnY2);
+                } else {
+                    ctx.fillStyle = '#444';
+                    ctx.fillText('       RETRY MISSION', cx, btnY2);
+                }
+
+                // 操作ヒント
+                ctx.font = 'bold 12px Courier New';
+                ctx.fillStyle = 'rgba(100,150,180,0.6)';
+                ctx.fillText('W/S or ↑↓ : SELECT    ENTER or SPACE : CONFIRM', cx, GAME.height * 0.91);
+            }
+
+            ctx.restore(); // shake 終了
         }
 
         function updateResultScreen() {
