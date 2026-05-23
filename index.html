@@ -579,7 +579,7 @@
                 this.element = document.getElementById('cielo-comm');
                 this.play("ミッションは敵撃破10機！いってらっしゃい傭兵さん！");
             },
-            play: function (msg) {
+            play: function (msg, type = "normal") { // ← 第2引数 type を追加（デフォルトは "normal"）
                 if (this.currentMsg === msg) return;
 
                 if (this.timerId) {
@@ -587,8 +587,15 @@
                     this.timerId = null;
                 }
 
+                // ▼ ここに type による色分け処理を追加 ▼
+                if (type === "system") {
+                    this.element.style.color = "#ff3333"; // システムメッセージ時は赤文字にする
+                } else {
+                    this.element.style.color = "#0f0";    // 通常時は元の緑色
+                }
+
                 this.currentMsg = msg;
-                this.element.innerHTML = `[ NAVI : シエロ ]<br>＝　${msg}　＝`;
+                this.element.innerHTML = `[ NAVI : シエロ ]<br>＝ ${msg} ＝`;
                 this.element.style.opacity = 1;
 
                 const duration = msg.length * 1000;
@@ -2191,8 +2198,8 @@
                         const enemyMaxHp = CONFIG.ENEMY_BASE_HP + playerStats.level * CONFIG.ENEMY_HP_LEVEL_MULT;
 
                         // カタパルト位置 (母艦中心から少しズレた位置)
-                        const spawnX = em.x + 80;
-                        const spawnY = em.y;
+                        const spawnX = em.x;
+                        const spawnY = em.y + 80;
 
                         entities.enemies.push({
                             x: spawnX,
@@ -2950,6 +2957,8 @@
             });
 
             updateHUD();
+            player.prevVx = player.vx;
+            player.prevVy = player.vy;
         }
 
         function checkLevelUp() {
@@ -3997,6 +4006,12 @@
                         GAME.state = 'TITLE';
                         GAME.titleLaunchTimer = 0;
                         GAME.fadeAlpha = 0;
+                        GAME.titleLeftTrailHistory = [];
+                        GAME.titleRightTrailHistory = [];
+                        player.leftTrailHistory = [];
+                        player.rightTrailHistory = [];
+                        player.leftWindTrailHistory = [];
+                        player.rightWindTrailHistory = [];
                     }
                 } else if (mouse.y >= btnY2 && mouse.y <= btnY2 + btnH) {
                     GAME.resultSelection = 1;
@@ -4171,9 +4186,33 @@
             },
             handleActiveInput: function (e) {
                 if (GAME.commState === 'LEVEL_UP') {
-                    if (e.code === 'KeyQ' && GAME.levelUpCards.length > 0) { GAME.levelUpCards[0].apply(); playerStats.levelUpStock--; GAME.commState = 'INACTIVE'; Cielo.play("リミット解除完了！お気をつけて！"); }
-                    if (e.code === 'KeyE' && GAME.levelUpCards.length > 1) { GAME.levelUpCards[1].apply(); playerStats.levelUpStock--; GAME.commState = 'INACTIVE'; Cielo.play("リミット解除完了！お気をつけて！"); }
-                    if (e.code === 'KeyR' && GAME.levelUpCards.length > 2) { GAME.levelUpCards[2].apply(); playerStats.levelUpStock--; GAME.commState = 'INACTIVE'; Cielo.play("リミット解除完了！お気をつけて！"); }
+                    let selectedCardIndex = -1;
+                    if (e.code === 'KeyQ' && GAME.levelUpCards.length > 0) selectedCardIndex = 0;
+                    if (e.code === 'KeyE' && GAME.levelUpCards.length > 1) selectedCardIndex = 1;
+                    if (e.code === 'KeyR' && GAME.levelUpCards.length > 2) selectedCardIndex = 2;
+
+                    if (selectedCardIndex !== -1) {
+                        GAME.levelUpCards[selectedCardIndex].apply();
+                        playerStats.levelUpStock--;
+
+                        if (playerStats.levelUpStock > 0) {
+                            // ストックがまだある場合はカードを引き直して継続
+                            GAME.levelUpCards = [];
+                            let available = [...upgradePool].filter(u => {
+                                const currentLvl = playerStats.upgrades[u.id] || 0;
+                                return currentLvl < u.maxLevel;
+                            });
+                            for (let i = 0; i < 3 && available.length > 0; i++) {
+                                const idx = Math.floor(Math.random() * available.length);
+                                GAME.levelUpCards.push(available.splice(idx, 1)[0]);
+                            }
+                            Cielo.play("続けてリミット解放が可能です！指示を！");
+                        } else {
+                            // ストックを使い切った場合は通信を閉じる
+                            GAME.commState = 'INACTIVE';
+                            Cielo.play("リミット解除完了！お気をつけて！");
+                        }
+                    }
                 } else if (GAME.commState === 'MENU') {
                     if (e.code === 'KeyF') { Cielo.play("了解、貴機座標へベクトル合わせます。Aガレージ、前進！"); GAME.commState = 'INACTIVE'; }
                     if (e.code === 'KeyR') { Cielo.play("目標座標を共有しました。Aガレージ火器管制、最大戦力へ！"); GAME.commState = 'INACTIVE'; }
