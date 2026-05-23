@@ -33,105 +33,6 @@
             pointer-events: none;
         }
 
-        /* HUD (v0.4.00で削除: ミニマップ・Canvas HUDに移行) */
-
-        /* レベルアップ画面 (三者択一UI) */
-        #level-up-screen {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(10, 10, 30, 0.9);
-            border: 2px solid #0ff;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            pointer-events: auto;
-        }
-
-        #level-up-screen h2 {
-            margin-top: 0;
-            color: #0ff;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
-        .upgrade-options {
-            display: flex;
-            gap: 20px;
-            margin-top: 20px;
-        }
-
-        .upgrade-card {
-            border: 1px solid #44f;
-            padding: 20px;
-            cursor: pointer;
-            width: 200px;
-            text-align: center;
-            background: rgba(20, 20, 50, 0.8);
-            border-radius: 8px;
-            transition: all 0.2s ease;
-        }
-
-        .upgrade-card:hover {
-            background: rgba(50, 50, 100, 0.9);
-            transform: scale(1.05);
-            border-color: #0ff;
-            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
-        }
-
-        .upgrade-card h3 {
-            margin: 0 0 10px 0;
-            color: #fff;
-        }
-
-        .upgrade-card p {
-            margin: 0;
-            color: #aaa;
-            font-size: 0.9rem;
-        }
-
-        /* ゲームオーバー画面 */
-        #game-over-screen {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            display: none;
-            pointer-events: auto;
-            background: rgba(30, 0, 0, 0.9);
-            padding: 50px;
-            border: 2px solid #f00;
-            border-radius: 10px;
-        }
-
-        #game-over-screen h1 {
-            color: #f00;
-            font-size: 3rem;
-            margin-top: 0;
-        }
-
-        button {
-            padding: 10px 30px;
-            font-size: 1.2rem;
-            cursor: pointer;
-            background: #222;
-            color: #fff;
-            border: 1px solid #f00;
-            border-radius: 5px;
-            font-family: inherit;
-            transition: 0.2s;
-        }
-
-        button:hover {
-            background: #f00;
-            color: #000;
-        }
-
         /* Cielo Communication */
         #cielo-comm {
             position: absolute;
@@ -352,7 +253,6 @@
             SPAWN_Y: -6000,
             SPAWN_TRIGGER_Y: -3000,
             MISSION_QUOTA: 10,
-            BOOSTER_COOLDOWN: 180, // 3秒(60fps)
             MISSILE_COOLDOWN: 60,  // 1秒
             MISSILE_SPEED: 5.3,    // 以前(8)の約2/3の速度
             MISSILE_TURN_RATE: 0.1,
@@ -712,7 +612,6 @@
             entities.missiles = [];
             entities.debris = [];
             entities.explosions = [];
-            entities.texts = [];
 
             // 敵母艦の初期化
             entities.enemyMothership = {
@@ -820,10 +719,6 @@
             if (statsElem) statsElem.style.display = 'none';
             const countdownElem = document.getElementById('countdown-overlay');
             if (countdownElem) countdownElem.style.display = 'none';
-            const levelUpElem = document.getElementById('level-up-screen');
-            if (levelUpElem) levelUpElem.style.display = 'none';
-            const gameOverElem = document.getElementById('game-over-screen');
-            if (gameOverElem) gameOverElem.style.display = 'none';
         }
 
         // 入力イベント
@@ -1060,12 +955,9 @@
             bodyAngle: -Math.PI / 2, // 機体の向いている方向
             turretAngle: -Math.PI / 2, // 砲塔の向いている方向
             flashTimer: 0, // ダメージ時の白点滅用タイマー
-            isInvincible: false, // 無敵状態フラグ
-            invincibleTimer: 0,
             isOverheated: false,
             overheatTimer: 0,
             missileCooldown: 0,
-            boosterCooldown: 0,
             isLandingSequence: false, // 着艦のアニメーション演出中か
             landingPhase: 'NONE',
             landingTimer: 0,
@@ -1110,7 +1002,6 @@
             missiles: [],  // プレイヤーのミサイル
             debris: [],    // 破片
             explosions: [], // 爆発
-            texts: []      // ダメージやレベルアップのポップアップテキスト
         };
 
         // Phase 3: 多重スクロール星背景 (Parallax Starfield)
@@ -2847,7 +2738,7 @@
 
             // --- Update Engine Trails ---
             if (!GAME.isPlayerDying) {
-                const isBoosterActive = GAME.launchSequence || (player.boosterCooldown > CONFIG.BOOSTER_COOLDOWN - 30);
+                const isBoosterActive = GAME.launchSequence || (player.boostActiveTimer > 0);
                 const isThrusting = (keys['KeyW'] || keys['ArrowUp'] || keys['KeyS'] || keys['ArrowDown'] ||
                     keys['KeyA'] || keys['ArrowLeft'] || keys['KeyD'] || keys['ArrowRight'] ||
                     isBoosterActive);
@@ -4247,7 +4138,7 @@
                     ctx.restore();
                 } else if (GAME.commState === 'LEVEL_UP') {
                     ctx.save();
-                    ctx.translate(0, radarRadius + 90);
+                    ctx.translate(0, radarRadius + 70);
 
                     const commKeys = ['Q', 'E', 'R'];
                     for (let i = 0; i < GAME.levelUpCards.length; i++) {
@@ -5232,8 +5123,6 @@
                     ctx.shadowBlur = 8;
                     ctx.fillText(alertText, 0, -50);
                 }
-
-                ctx.restore();
 
                 CommStateManager.draw(ctx, radarRadius);
 
