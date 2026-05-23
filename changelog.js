@@ -1,6 +1,13 @@
 // changelog.js
 const CHANGELOG = [
   {
+    version: "v0.5.02",
+    date: "2026-05-24",
+    changes: [
+      "BugFix: drawCircularText関数が未定義だったエラーを修正"
+    ]
+  },
+  {
     version: "v0.5.01",
     date: "2026-05-23",
     changes: [

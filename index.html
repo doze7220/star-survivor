@@ -1420,7 +1420,7 @@
                 if (playerStats.autoRepairCooldown > 0) {
                     playerStats.autoRepairCooldown--;
                 }
-                
+
                 if (player.boostGauge === undefined) {
                     player.boostGauge = 80;
                     player.boostActiveTimer = 0;
@@ -2061,7 +2061,7 @@
                 let m = entities.missiles[i];
                 if (m.target && m.target.hp <= 0) m.target = null;
                 if (!m.target && m.life > 60) m.life = 60; // ターゲットロスト時は早めに自爆
-                
+
                 if (m.target) {
                     const tx = m.target.x - m.x;
                     const ty = m.target.y - m.y;
@@ -2434,14 +2434,19 @@
                 // --- 3. 移動角度と慣性移動 (サブスペース慣性ドリフト推進) ---
                 const moveAngle = Math.atan2(targetY - e.y, targetX - e.x);
 
-                // 敵の向いているアングルを移動方向（moveAngle）に合わせる
-                // 障害物回避（avoidX, avoidY）のステアリング力を加味した理想の最高速度ベクトルを計算
+                // 障害物回避（avoidX, avoidY）のステアリング力を加味した理想の進行ベクトルを計算
                 const targetVx = Math.cos(moveAngle) * maxSpd + avoidX;
                 const targetVy = Math.sin(moveAngle) * maxSpd + avoidY;
 
-                // ブレンド係数を適用し、既存の慣性を残しながらジワジワと目標へ引っ張る
-                e.vx += (targetVx - e.vx) * blend;
-                e.vy += (targetVy - e.vy) * blend;
+                // 目標への進行角度
+                const driveAngle = Math.atan2(targetVy, targetVx);
+
+                // 加速度係数（プレイヤー機の挙動スケールに合わせる）
+                const accelForce = maxSpd * 0.05;
+
+                // ベクトルへの直接加算による慣性駆動
+                e.vx += Math.cos(driveAngle) * accelForce;
+                e.vy += Math.sin(driveAngle) * accelForce;
 
                 // Friction (宇宙空間の自然減衰)
                 e.vx *= CONFIG.FRICTION;
@@ -3020,6 +3025,48 @@
         // ==========================================
         // TITLE / LEVEL_UP / RESULT 画面の制御ロジック
         // ==========================================
+
+        // --- 円形テキスト描画関数 ---
+        function drawCircularText(ctx, text, radius, startAngle, isBottom = false) {
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            let totalAngle = 0;
+            for (let i = 0; i < text.length; i++) {
+                totalAngle += ctx.measureText(text[i]).width / radius;
+            }
+
+            // isBottomの時は開始角度をずらし、進行方向を逆（左から右）にする
+            let currentAngle = isBottom ? startAngle + (totalAngle / 2) : startAngle - (totalAngle / 2);
+
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const charWidth = ctx.measureText(char).width;
+                const charAngle = charWidth / radius;
+
+                // 文字の配置角度
+                const angle = isBottom ? currentAngle - charAngle / 2 : currentAngle + charAngle / 2;
+
+                ctx.save();
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                ctx.translate(x, y);
+
+                if (isBottom) {
+                    ctx.rotate(angle - Math.PI / 2);
+                } else {
+                    ctx.rotate(angle + Math.PI / 2);
+                }
+
+                ctx.fillText(char, 0, 0);
+                ctx.restore();
+
+                // 次の文字へ進む
+                currentAngle = isBottom ? currentAngle - charAngle : currentAngle + charAngle;
+            }
+            ctx.restore();
+        }
 
         // --- ベクターパスストリーム方式による滑らかなトレイル描画（先細り仕様） ---
         function drawRibbonTrail(history, colorBase, maxLen) {
@@ -5081,27 +5128,31 @@
                     }
                 });
                 // --- v0.5.00 マイクロHUD拡張 ---
+                // ※すでにレーダー中心に translate されているコンテキスト内で実行
                 ctx.save();
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-
-                // A. レベル＆経験値表示（上部）
                 ctx.font = 'bold 12px Courier New';
-                ctx.fillStyle = '#0ff';
                 ctx.shadowColor = '#000';
                 ctx.shadowBlur = 4;
-                drawCircularText(ctx, `Lv.${playerStats.level.toString().padStart(3, '0')} Exp.${playerStats.exp}/${playerStats.nextLevelExp}`, radarRadius + 20, -Math.PI / 2, false);
 
-                // B. スピード＆Gフォースメーター（下部）
+                // 上部（内側）：レベル＆経験値 (12時方向)
+                ctx.fillStyle = '#00ffff';
+                const levelText = `Lv.${playerStats.level.toString().padStart(3, '0')}  Exp.${playerStats.exp}/${playerStats.nextLevelExp}`;
+                drawCircularText(ctx, levelText, radarRadius - 7, -Math.PI / 2, false);
+
+                // スピード＆Gフォースの計算
                 const speedKms = ((Math.hypot(player.vx, player.vy) * 60) / 1000).toFixed(1);
                 const prevVx = player.prevVx || 0;
                 const prevVy = player.prevVy || 0;
                 const gForce = (Math.hypot(player.vx - prevVx, player.vy - prevVy) * 1.5).toFixed(1);
 
-                ctx.fillStyle = '#0ff';
-                drawCircularText(ctx, `SPD: ${speedKms} km/s`, radarRadius + 20, Math.PI / 2, true);
-                ctx.fillStyle = '#f80';
-                drawCircularText(ctx, `ACC: ${gForce} G`, radarRadius + 35, Math.PI / 2, true);
+                // 下部（内側）：1行にまとめる
+                ctx.fillStyle = '#ffa500';
+                const speedAccText = `SPD:${speedKms}km/s  ACC:${gForce}G`;
+                drawCircularText(ctx, speedAccText, radarRadius - 6, Math.PI / 1.95, true);
+
+                ctx.restore();
 
                 // C. ダイナミック・コンテクスト・アラート
                 // 優先度: WARNING > OVERHEAT > DOCK INBOUND
