@@ -1,5 +1,23 @@
 const changelog = [
   {
+    version: "v0.5.20",
+    date: "2026-05-24",
+    description: "Hotfix: Prevented game entities and HUD from rendering during TITLE and RESULT scenes.",
+    details: [
+      "【修正】`main.js` の `draw()` にて、状態が `TITLE` または `RESULT` の時は `drawGameEntities` および `drawHUD` を実行しないよう修正し、意図せずゲーム内UIや自機・母艦が描画されてしまう問題を解消"
+    ]
+  },
+  {
+    version: "v0.5.19",
+    date: "2026-05-24",
+    description: "Refactoring Phase 3 Addendum 2: Integrated TITLE/RESULT rendering into drawOverlay.",
+    details: [
+      "【リファクタリング】`TitleScene` および `ResultScene` 内の描画処理（`draw()` メソッド）を抽出し、`js/utils/drawOverlay.js` に統合",
+      "【最適化】`main.js` の `draw()` 関数内から `TITLE` および `RESULT` ステートの早期リターンを削除し、過去のゲーム画面（エンティティ）が背面レイヤーに描画される仕様へ移行",
+      "【整理】不要となった `draw` メソッドを `TitleScene.js` と `ResultScene.js` から削除"
+    ]
+  },
+  {
     version: "v0.5.18",
     date: "2026-05-24",
     description: "Refactoring Phase 3 Addendum: Integrated Level Up Screen into HUD.",

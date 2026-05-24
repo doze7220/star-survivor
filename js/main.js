@@ -2418,11 +2418,11 @@ function drawGameEntities(ctx) {
 function draw() {
     drawBackground(ctx, stars, GAME);
 
-    if (GAME.state === 'TITLE') return SceneManager.title.draw(ctx);
-    if (GAME.state === 'RESULT') return SceneManager.result.draw(ctx);
-
-    drawGameEntities(ctx);
-    drawHUD(ctx, GAME, playerStats, player, entities, CONFIG);
+    if (GAME.state !== 'TITLE' && GAME.state !== 'RESULT') {
+        drawGameEntities(ctx);
+        drawHUD(ctx, GAME, playerStats, player, entities, CONFIG);
+    }
+    
     drawOverlay(ctx, GAME);
 }
 
