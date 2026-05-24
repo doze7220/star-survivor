@@ -1,4 +1,4 @@
-# 作業指示書：20260524_order4_physics_overhaul(v0.5.08)
+# 作業指示書：20260524_order4_physics_overhaul(v0.5.07)
 
 ## 役割
 あなたは優秀なフロントエンドエンジニアです。
