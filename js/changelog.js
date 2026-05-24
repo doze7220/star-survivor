@@ -1,5 +1,14 @@
 const changelog = [
   {
+    version: "v0.5.27",
+    date: "2026-05-25",
+    description: "Bugfix: Corrected engine and wind trail coordinate logic.",
+    details: [
+      "【不具合修正】機体回転時に、メインエンジンの光の軌跡（トレイル）の発生座標がズレる問題を修正",
+      "【不具合修正】機体回転時に、翼端から発生する風トレイルの座標がズレる問題を修正"
+    ]
+  },
+  {
     version: "v0.5.26",
     date: "2026-05-25",
     description: "Refactoring: Restructured utils directory into renderers and systems.",

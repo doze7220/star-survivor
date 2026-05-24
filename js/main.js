@@ -1889,16 +1889,15 @@ function update() {
             InputManager.isPressed('KeyA') || InputManager.isPressed('ArrowLeft') || InputManager.isPressed('KeyD') || InputManager.isPressed('ArrowRight') ||
             isBoosterActive);
 
-        const backX = player.x - Math.cos(player.bodyAngle) * (CONFIG.PLAYER_SIZE_W / 2);
-        const backY = player.y - Math.sin(player.bodyAngle) * (CONFIG.PLAYER_SIZE_W / 2);
-        const perpX = Math.cos(player.bodyAngle + Math.PI / 2);
-        const perpY = Math.sin(player.bodyAngle + Math.PI / 2);
-        const offsetDist = 5; // Tomcat twin nozzle offset
+        const length = CONFIG.PLAYER_SIZE_W / 2;
+        const width = 5; // Tomcat twin nozzle offset
+        const cosA = Math.cos(player.bodyAngle);
+        const sinA = Math.sin(player.bodyAngle);
 
-        const leftNozzleX = backX - perpX * offsetDist;
-        const leftNozzleY = backY - perpY * offsetDist;
-        const rightNozzleX = backX + perpX * offsetDist;
-        const rightNozzleY = backY + perpY * offsetDist;
+        const leftNozzleX = player.x - (length * cosA) - (width * sinA);
+        const leftNozzleY = player.y - (length * sinA) + (width * cosA);
+        const rightNozzleX = player.x - (length * cosA) + (width * sinA);
+        const rightNozzleY = player.y - (length * sinA) - (width * cosA);
 
         // --- [追加] 速度感応型 風トレイルの履歴更新 ---
         if (!player.leftWindTrailHistory) player.leftWindTrailHistory = [];
@@ -1909,17 +1908,16 @@ function update() {
         // 一定速度以上、かつ生存時のみ風トレイルのサンプリングを行う
         if (!GAME.isPlayerDying && currentSpeed >= CONFIG.WIND_TRAIL_MIN_SPEED) {
             // 翼端から発生させる（双発）
-            const wingOffsetX = Math.cos(player.bodyAngle + Math.PI / 2) * (CONFIG.PLAYER_SIZE_W / 2 + 5);
-            const wingOffsetY = Math.sin(player.bodyAngle + Math.PI / 2) * (CONFIG.PLAYER_SIZE_W / 2 + 5);
+            const wingWidth = CONFIG.PLAYER_SIZE_W / 2 + 5;
 
             player.leftWindTrailHistory.push({
-                x: player.x - wingOffsetX,
-                y: player.y - wingOffsetY,
+                x: player.x - (wingWidth * sinA),
+                y: player.y + (wingWidth * cosA),
                 speed: currentSpeed
             });
             player.rightWindTrailHistory.push({
-                x: player.x + wingOffsetX,
-                y: player.y + wingOffsetY,
+                x: player.x + (wingWidth * sinA),
+                y: player.y - (wingWidth * cosA),
                 speed: currentSpeed
             });
         } else {
