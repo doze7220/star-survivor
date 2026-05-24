@@ -16,7 +16,9 @@ const SpriteCache = {
     debrisSmoke: null, // デブリの煙用キャッシュ
     enemyMothership: null,
     enemyMothershipFlash: null,
-    alliedMothership: null,
+    playerBullet: null,
+    enemyBulletLaser: null,
+    missile: null,
 
     init: function () {
         this.player = this.createShip('#0f0', CONFIG.PLAYER_SIZE_W, CONFIG.PLAYER_SIZE_H);  // 緑の自機
@@ -34,6 +36,65 @@ const SpriteCache = {
         this.enemyMothership = this.createEnemyMothership(false);
         this.enemyMothershipFlash = this.createEnemyMothership(true);
         this.alliedMothership = this.createAlliedMothership();
+        
+        this.playerBullet = this.createLaserBullet('#ff0', '#fff');
+        this.enemyBulletLaser = this.createLaserBullet('#f00', '#fff');
+        this.missile = this.createMissileSprite();
+    },
+
+    createLaserBullet: function(outerColor, innerColor) {
+        // max width = CONFIG.BULLET_SIZE * 2.8 * 2, max height = CONFIG.BULLET_SIZE * 0.7 * 2
+        // To be safe and give some padding, we multiply by a bit more or use exact bounds.
+        const padding = 2;
+        const rw = CONFIG.BULLET_SIZE * 2.8;
+        const rh = CONFIG.BULLET_SIZE * 0.7;
+        const w = Math.ceil(rw * 2) + padding * 2;
+        const h = Math.ceil(rh * 2) + padding * 2;
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        
+        const cx = w / 2;
+        const cy = h / 2;
+        
+        ctx.fillStyle = outerColor;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = innerColor;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, CONFIG.BULLET_SIZE * 1.8, CONFIG.BULLET_SIZE * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        return c;
+    },
+
+    createMissileSprite: function() {
+        // bounds: x from -6 to 6, y from -3.5 to 3.5
+        const w = 20;
+        const h = 20;
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        const cx = w / 2;
+        const cy = h / 2;
+        
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.fillStyle = '#fff';
+        // 四角部分 (■)
+        ctx.fillRect(-6, -2.5, 5, 5);
+        // 三角部分 (▲)
+        ctx.beginPath();
+        ctx.moveTo(6, 0);
+        ctx.lineTo(-1, -3.5);
+        ctx.lineTo(-1, 3.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        
+        return c;
     },
 
     createShip: function (color, w, h, isFlash = false) {

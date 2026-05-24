@@ -1,5 +1,25 @@
 const changelog = [
   {
+    version: "v0.5.18",
+    date: "2026-05-24",
+    description: "Refactoring Phase 3 Addendum: Integrated Level Up Screen into HUD.",
+    details: [
+      "【リファクタリング】`main.js` に残存していた `drawLevelUpScreen` を `js/utils/drawHUD.js` に統合",
+      "【最適化】`draw()` 内での `LEVEL_UP` ステート時の早期リターンを削除し、レベルアップ画面の背景にゲーム画面が透けて見える仕様へ移行",
+      "【整理】不要となった `drawLevelUpScreen` 関数を `main.js` から完全削除"
+    ]
+  },
+  {
+    version: "v0.5.17",
+    date: "2026-05-24",
+    description: "Refactoring Phase 4: Separated rendering logic and converted bullets/missiles to sprites.",
+    details: [
+      "【リファクタリング】`main.js` に肥大化していた描画処理のうち、純粋描画部分を `js/utils/` 配下（`drawBackground.js`, `drawEffects.js`, `drawHUD.js`, `drawOverlay.js`）へ抽出",
+      "【最適化】`main.js` の `draw()` を簡略化し、プレイヤーや敵など物理と密結合するエンティティ描画のみを残して整理",
+      "【最適化】毎フレーム canvas に直接描画していた自機弾・敵弾・ミサイルを `asset.js` でのキャッシュ化（スプライト）に移行し、描画負荷を低減"
+    ]
+  },
+  {
     version: "v0.5.16",
     date: "2026-05-24",
     description: "Refactoring Phase 3: Extracted keyboard input handling.",

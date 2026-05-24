@@ -2122,207 +2122,7 @@ function updateLevelUpScreen() {
     }
 }
 
-function drawLevelUpScreen() {
-    ctx.fillStyle = 'rgba(5, 5, 16, 0.75)';
-    ctx.fillRect(0, 0, GAME.width, GAME.height);
 
-    const cardW = 260;
-    const cardH = 340;
-    const gap = 40;
-    const totalW = cardW * 3 + gap * 2;
-    const startX = (GAME.width - totalW) / 2;
-    const startY = GAME.height * 0.35;
-
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 36px Courier New';
-    ctx.textAlign = 'center';
-    ctx.fillText('=== LEVEL UP ===', GAME.width / 2, GAME.height * 0.16);
-
-    ctx.fillStyle = '#0ff';
-    ctx.font = 'bold 16px Courier New';
-    ctx.fillText('SELECT AN UPGRADE TO REINFORCE THE HULL', GAME.width / 2, GAME.height * 0.22);
-
-    // 借金差し押さえの特別表示
-    if (GAME.credits < 0) {
-        ctx.fillStyle = '#f33';
-        ctx.font = 'bold 22px Courier New';
-        ctx.fillText('WARNING: DEBT OUTSTANDING. UPGRADE PROTOCOLS SEIZED.', GAME.width / 2, GAME.height * 0.28);
-        if (Math.floor(Date.now() / 400) % 2 === 0) {
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 16px Courier New';
-            ctx.fillText('PRESS ENTER OR SPACE TO ABORT PROTOCOL', GAME.width / 2, GAME.height * 0.85);
-        }
-
-        for (let i = 0; i < 3; i++) {
-            const cardX = startX + i * (cardW + gap);
-            ctx.save();
-
-            ctx.fillStyle = 'rgba(60, 20, 20, 0.9)';
-            ctx.strokeStyle = '#f33';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.rect(cardX, startY, cardW, cardH);
-            ctx.fill();
-            ctx.stroke();
-
-            ctx.translate(cardX + cardW / 2, startY + cardH / 2);
-            ctx.rotate(-Math.PI / 12);
-            ctx.fillStyle = '#f33';
-            ctx.strokeStyle = '#f33';
-            ctx.lineWidth = 3;
-            ctx.font = 'bold 26px Courier New';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.strokeRect(-110, -25, 220, 50);
-            ctx.fillText('SEIZED BY', 0, -10);
-            ctx.fillText('UNION', 0, 12);
-
-            ctx.restore();
-        }
-        return;
-    }
-
-    for (let i = 0; i < 3; i++) {
-        const card = GAME.levelUpCards[i];
-        if (!card) continue;
-
-        const isSelected = (GAME.levelUpState === 'CHOOSING' && GAME.levelUpSelectedIndex === i) ||
-            (GAME.levelUpState === 'DECIDED' && GAME.levelUpDecidedIndex === i);
-
-        ctx.save();
-
-        let x = startX + i * (cardW + gap);
-        let y = startY;
-        let scale = 1.0;
-
-        if (GAME.levelUpState === 'DECIDED') {
-            if (isSelected) {
-                const progress = (45 - GAME.levelUpDecidedTimer) / 45;
-                const targetCenterX = GAME.width / 2 - cardW / 2;
-                const targetCenterY = GAME.height * 0.4 - cardH / 2;
-                x = x + (targetCenterX - x) * Math.min(progress * 1.5, 1.0);
-                y = y + (targetCenterY - y) * Math.min(progress * 1.5, 1.0);
-                scale = 1.0 + Math.min(progress * 2.0, 1.0) * 0.5;
-            } else {
-                y += GAME.levelUpNonSelectedY * GAME.levelUpNonSelectedY * 0.05;
-                ctx.globalAlpha = Math.max(0, 1.0 - (GAME.levelUpNonSelectedY / 20));
-            }
-        } else {
-            if (isSelected) {
-                scale = 1.05;
-                y -= 5;
-            }
-        }
-
-        ctx.translate(x + cardW / 2, y + cardH / 2);
-        ctx.scale(scale, scale);
-        ctx.translate(-cardW / 2, -cardH / 2);
-
-        const nextLvl = (playerStats.upgrades[card.id] || 0) + 1;
-        const isLimitBurst = nextLvl === 6;
-
-        let cardBgColor = isSelected ? 'rgba(0, 40, 50, 0.95)' : 'rgba(15, 20, 30, 0.85)';
-        let cardStrokeColor = isSelected ? (Math.floor(Date.now() / 100) % 2 === 0 ? '#fff' : (card.categoryColor || '#0ff')) : (card.categoryColor || '#334455');
-        let titleColor = isSelected ? '#0ff' : '#888';
-        let descColor = isSelected ? '#fff' : '#aaa';
-
-        if (isLimitBurst) {
-            cardBgColor = isSelected ? 'rgba(60, 10, 10, 0.95)' : 'rgba(30, 5, 5, 0.85)';
-            cardStrokeColor = isSelected ? (Math.floor(Date.now() / 80) % 2 === 0 ? '#ff0' : '#f00') : '#a00';
-            titleColor = isSelected ? '#ff0' : '#f88';
-            descColor = isSelected ? '#fff' : '#fbb';
-        }
-
-        ctx.fillStyle = cardBgColor;
-        ctx.strokeStyle = cardStrokeColor;
-        ctx.lineWidth = isSelected ? (isLimitBurst ? 4 : 3) : 1.5;
-        ctx.beginPath();
-        ctx.rect(0, 0, cardW, cardH);
-        ctx.fill();
-        ctx.stroke();
-
-        if (isSelected) {
-            const grad = ctx.createRadialGradient(cardW / 2, cardH / 2, 10, cardW / 2, cardH / 2, cardW * 0.8);
-            if (isLimitBurst) {
-                grad.addColorStop(0, 'rgba(255, 50, 0, 0.15)');
-                grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            } else {
-                grad.addColorStop(0, 'rgba(0, 255, 255, 0.08)');
-                grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            }
-            ctx.fillStyle = grad;
-            ctx.fillRect(1, 1, cardW - 2, cardH - 2);
-        }
-
-        if (isLimitBurst) {
-            ctx.fillStyle = '#f00';
-            ctx.font = 'bold 14px Courier New';
-            ctx.textAlign = 'center';
-            // Blink effect for LIMIT BURST text
-            if (Math.floor(Date.now() / 150) % 2 === 0) {
-                ctx.fillText('>>> LIMIT BURST <<<', cardW / 2, 20);
-            }
-        }
-
-        ctx.fillStyle = titleColor;
-        ctx.font = 'bold 20px Courier New';
-        ctx.textAlign = 'center';
-        ctx.fillText(card.name, cardW / 2, 45);
-
-        ctx.strokeStyle = cardStrokeColor;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(30, 60);
-        ctx.lineTo(cardW - 30, 60);
-        ctx.stroke();
-
-        ctx.fillStyle = descColor;
-        ctx.font = 'bold 13px Courier New';
-        ctx.textAlign = 'center';
-
-        // Wrap text manually or use existing logic (here we use simple multi-line if needed, but previously it was just single fillText)
-        const descLines = card.description.split('\\n');
-        for (let j = 0; j < descLines.length; j++) {
-            ctx.fillText(descLines[j], cardW / 2, 100 + j * 20);
-        }
-
-
-        ctx.restore();
-    }
-
-    if (GAME.levelUpState !== 'DECIDED' || GAME.levelUpDecidedTimer > 15) {
-        const hoverOffset = Math.sin(GAME.levelUpCursorHoverTimer * 0.08) * 8;
-        let curY = startY - 25 + hoverOffset;
-
-        if (GAME.levelUpState === 'DECIDED') {
-            const progress = (45 - GAME.levelUpDecidedTimer) / 30;
-            const targetY = startY + 20;
-            curY = curY + (targetY - curY) * Math.min(progress, 1.0);
-        }
-
-        ctx.save();
-        ctx.fillStyle = '#0ff';
-        ctx.beginPath();
-        ctx.moveTo(GAME.levelUpCursorX, curY + 12);
-        ctx.lineTo(GAME.levelUpCursorX - 10, curY);
-        ctx.lineTo(GAME.levelUpCursorX + 10, curY);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-    }
-
-    entities.particles.forEach(p => {
-        if (p.type === 'LEVEL_UP_HIT_PARTICLE') {
-            ctx.save();
-            ctx.globalAlpha = p.life;
-            ctx.fillStyle = '#0ff';
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 4 * p.life, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-        }
-    });
-}
 
 // ==========================================
 // 5. 描画フェーズ (Rendering)
@@ -2474,31 +2274,7 @@ const CommStateManager = {
     }
 };
 
-function draw() {
-    ctx.fillStyle = '#050510';
-    ctx.fillRect(0, 0, GAME.width, GAME.height);
-
-    ctx.fillStyle = '#fff';
-    const titleFadeAlpha = GAME.state === 'TITLE' ? Math.max(0, 1.0 - (GAME.fadeAlpha || 0)) : 1.0;
-    stars.forEach(s => {
-        ctx.globalAlpha = s.layer.rate * titleFadeAlpha;
-        ctx.fillRect(s.x, s.y, s.layer.size, s.layer.size);
-    });
-    ctx.globalAlpha = 1.0;
-
-    if (GAME.state === 'TITLE') {
-        SceneManager.title.draw(ctx);
-        return;
-    }
-    if (GAME.state === 'LEVEL_UP') {
-        drawLevelUpScreen();
-        return;
-    }
-    if (GAME.state === 'RESULT') {
-        SceneManager.result.draw(ctx);
-        return;
-    }
-
+function drawGameEntities(ctx) {
     ctx.save();
     ctx.translate(GAME.width / 2 - player.x, GAME.height / 2 - player.y);
 
@@ -2506,10 +2282,7 @@ function draw() {
     ctx.save();
     ctx.translate(CONFIG.MOTHERSHIP_X, CONFIG.MOTHERSHIP_Y);
     ctx.rotate(-Math.PI / 2); // 上向き
-
-    // スプライトキャッシュを描画 (cx=150, cy=100 なので -150, -100 を指定)
     ctx.drawImage(SpriteCache.alliedMothership, -150, -100);
-
     ctx.restore();
 
     // --- 敵母艦 (Enemy Mothership) 描画 ---
@@ -2517,11 +2290,9 @@ function draw() {
         let em = entities.enemyMothership;
         ctx.save();
         ctx.translate(em.x, em.y);
-        // 敵母艦の向き（Aガレージは-Math.PI/2だが、敵母艦は下向きなら+Math.PI/2とするが、リスポーン位置が上なのでプレイヤーへ向けるか、固定でMath.PI/2にする）
         ctx.rotate(Math.PI / 2); // 下向き
 
         const sprite = em.flashTimer > 0 ? SpriteCache.enemyMothershipFlash : SpriteCache.enemyMothership;
-        // cx=150, cy=100 in the 400x200 sprite, so draw at -150, -100
         ctx.drawImage(sprite, -150, -100);
 
         // HPバーの描画
@@ -2539,7 +2310,7 @@ function draw() {
         ctx.restore();
     }
 
-    // --- ランディングエリア表示（着艦中・発艦中・ターゲット中・クリア後は非表示）---
+    // --- ランディングエリア表示 ---
     if (!player.isLandingSequence && !GAME.launchSequence && !GAME.isMissionClear && entities.enemies.length === 0) {
         const lcat = getCatapultSpec();
         const landingColor = 'rgba(0, 220, 100, 0.18)';
@@ -2575,113 +2346,21 @@ function draw() {
         ctx.restore();
     }
 
-    entities.gems.forEach(g => {
-        let sprite = SpriteCache.gem;
-        if (g.kind === 'HEAL') sprite = SpriteCache.gemHeal;
-        if (g.kind === 'BIG_EXP') sprite = SpriteCache.gemBigExp;
-        const drawSize = sprite.width;
-        ctx.drawImage(sprite, g.x - drawSize / 2, g.y - drawSize / 2);
-    });
-
-    // パーティクル・デブリの描画 (背景レイヤー)
-    EffectManager.draw(ctx, entities, 'background');
-
-    // 敵の弾描画 (細い赤い楕円形＋白いコアのSF風レーザー)
-    entities.enemyBullets.forEach(b => {
-        ctx.save();
-        ctx.translate(b.x, b.y);
-        const angle = Math.atan2(b.vy, b.vx);
-        ctx.rotate(angle);
-
-        // 外側の赤い発光
-        ctx.fillStyle = '#f00';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, CONFIG.BULLET_SIZE * 2.8, CONFIG.BULLET_SIZE * 0.7, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 内側の白いコア
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, CONFIG.BULLET_SIZE * 1.8, CONFIG.BULLET_SIZE * 0.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-    });
-
-    // 自機の弾描画 (細い黄色の楕円形＋白いコアのSF風レーザー)
-    entities.bullets.forEach(b => {
-        ctx.save();
-        ctx.translate(b.x, b.y);
-        const angle = Math.atan2(b.vy, b.vx);
-        ctx.rotate(angle);
-
-        // 外側の黄色の発光
-        ctx.fillStyle = '#ff0';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, CONFIG.BULLET_SIZE * 2.8, CONFIG.BULLET_SIZE * 0.7, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 内側の白いコア
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, CONFIG.BULLET_SIZE * 1.8, CONFIG.BULLET_SIZE * 0.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-    });
-
-    // ミサイル描画 (▲と■の組み合わせ、色は白)
-    entities.missiles.forEach(m => {
-        ctx.save();
-        ctx.translate(m.x, m.y);
-        ctx.rotate(m.angle);
-
-        ctx.fillStyle = '#fff';
-        // 四角部分 (■)
-        ctx.fillRect(-6, -2.5, 5, 5);
-        // 三角部分 (▲)
-        ctx.beginPath();
-        ctx.moveTo(6, 0);
-        ctx.lineTo(-1, -3.5);
-        ctx.lineTo(-1, 3.5);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
-    });
-    // 自機の２本スラスター描画
-    if (!GAME.isPlayerDying) {
-        drawRibbonTrail(player.leftTrailHistory, '#00d2ff', 7);  // トムキャット風のツインバーニア（シアンブルー）
-        drawRibbonTrail(player.rightTrailHistory, '#00d2ff', 7); // トムキャット風のツインバーニア（シアンブルー）
-    }
-
-    drawWindTrail(player.leftWindTrailHistory);
-    drawWindTrail(player.rightWindTrailHistory);
-    // =================================================================
-
-    // 敵機の１本スラスター描画
-    entities.enemies.forEach(e => {
-        let color = CONFIG.COLOR_ENEMY_DOGFIGHTER;
-        if (e.personality === 'RAMMER') color = CONFIG.COLOR_ENEMY_RAMMER;
-        if (e.personality === 'SNIPER') color = CONFIG.COLOR_ENEMY_SNIPER;
-        drawRibbonTrail(e.trailHistory, color, 5); // 太さはやや細め、長さも半分
-    });
+    drawEffects(ctx, player, entities, SpriteCache, 'background');
 
     // 敵機描画
     entities.enemies.forEach(e => {
         ctx.save();
         ctx.translate(e.x, e.y);
 
-        // 敵のHPゲージ・ヒートゲージ (機体の下に回転せず描画)
+        // 敵のHPゲージ・ヒートゲージ
         const barW = 30;
-        // 上段：HPゲージ
         const hpRatio = Math.max(0, e.hp / e.maxHp);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         ctx.fillRect(-barW / 2, 22, barW, 3);
         ctx.fillStyle = hpRatio <= 0.2 ? '#f00' : '#0f0';
         ctx.fillRect(-barW / 2, 22, barW * hpRatio, 3);
 
-        // 下段：ヒートゲージ
         if (e.heat > 0) {
             const heatRatio = Math.max(0, Math.min(1, e.heat / CONFIG.HEAT_MAX));
             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
@@ -2698,7 +2377,6 @@ function draw() {
 
         ctx.rotate(e.angle);
 
-        // 性格に応じたプリレンダースプライトを選択
         let sprite = SpriteCache.enemyDogfighter;
         if (e.personality === 'RAMMER') sprite = SpriteCache.enemyRammer;
         if (e.personality === 'SNIPER') sprite = SpriteCache.enemySniper;
@@ -2716,7 +2394,7 @@ function draw() {
 
     // 自機描画とマイクロHUD (生存時のみ)
     if (!GAME.isPlayerDying) {
-        // 砲塔描画 (機体より先に描画して下に隠れるようにする)
+        // 砲塔描画
         ctx.save();
         ctx.translate(player.x, player.y);
         ctx.rotate(player.turretAngle);
@@ -2730,87 +2408,22 @@ function draw() {
         ctx.rotate(player.bodyAngle);
         ctx.drawImage(SpriteCache.player, -SpriteCache.player.width / 2, -SpriteCache.player.height / 2);
         ctx.restore();
-
-        HUDManager.draw(ctx, player, GAME);
     }
 
-    // 爆発の描画 (前面レイヤー)
-    EffectManager.draw(ctx, entities, 'foreground');
+    drawEffects(ctx, player, entities, SpriteCache, 'foreground');
 
-    ctx.restore(); // カメラ適用終了
+    ctx.restore();
+}
 
-    // ----------------------------------------
-    // プレイヤー中心レーダーと敵方向マーカー描画 (抽出先: radar.js)
-    // ----------------------------------------
-    Radar.draw(ctx, player, entities, CONFIG, GAME);
+function draw() {
+    drawBackground(ctx, stars, GAME);
 
-    // ----------------------------------------
-    // 被弾時の画面全体赤フラッシュ演出
-    // ----------------------------------------
-    if (GAME.damageFlashTimer > 0) {
-        ctx.fillStyle = `rgba(255, 0, 0, ${(GAME.damageFlashTimer / CONFIG.FLASH_DURATION) * 0.4})`;
-        ctx.fillRect(0, 0, GAME.width, GAME.height);
-        GAME.damageFlashTimer--;
-    }
+    if (GAME.state === 'TITLE') return SceneManager.title.draw(ctx);
+    if (GAME.state === 'RESULT') return SceneManager.result.draw(ctx);
 
-    // ----------------------------------------
-    // 発進シーケンスの Canvas ベクターカウントダウン描画
-    // ----------------------------------------
-    if (GAME.launchSequence && GAME.launchTimer <= 240) {
-        let currentText = "";
-        let frameInCycle = 0;
-
-        if (GAME.launchTimer <= 60) {
-            currentText = "3";
-            frameInCycle = GAME.launchTimer;
-        } else if (GAME.launchTimer <= 120) {
-            currentText = "2";
-            frameInCycle = GAME.launchTimer - 60;
-        } else if (GAME.launchTimer <= 180) {
-            currentText = "1";
-            frameInCycle = GAME.launchTimer - 120;
-        } else if (GAME.launchTimer <= 240) {
-            currentText = "GO!";
-            frameInCycle = GAME.launchTimer - 180;
-        }
-
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        let opacity = 1.0;
-        let fontSize = 150;
-
-        if (frameInCycle <= 48) {
-            const p = frameInCycle / 48;
-            fontSize = 200 - 50 * p; // スケールダウンしながら出現
-            opacity = p;
-        } else {
-            const p = (frameInCycle - 48) / 12;
-            fontSize = 150;
-            opacity = 1.0 - p; // 急速にフェードアウト
-        }
-
-        // ネオンシアンのグローエフェクト
-        ctx.shadowColor = '#0ff';
-        ctx.shadowBlur = 30;
-        ctx.fillStyle = `rgba(0, 255, 255, ${opacity})`;
-        ctx.font = `bold ${fontSize}px Courier New`;
-        ctx.fillText(currentText, GAME.width / 2, GAME.height / 2);
-
-        ctx.restore();
-    }
-
-    // ミニマップ描画
-    MapManager.draw(ctx, player, entities, CONFIG, GAME);
-
-    // ----------------------------------------
-    // 画面全体のフェード処理
-    // ----------------------------------------
-    if (GAME.fadeAlpha > 0) {
-        ctx.fillStyle = `rgba(0, 0, 0, ${GAME.fadeAlpha})`;
-        ctx.fillRect(0, 0, GAME.width, GAME.height);
-    }
+    drawGameEntities(ctx);
+    drawHUD(ctx, GAME, playerStats, player, entities, CONFIG);
+    drawOverlay(ctx, GAME);
 }
 
 // ==========================================
