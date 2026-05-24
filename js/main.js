@@ -202,20 +202,20 @@ function initResultScreen(isClear) {
     if (isClear) {
         if (damageTaken === 0) {
             if (operationTime >= 120) {
-                msg = "2分オーバーの長期戦、お疲れ様です！ 無傷なんてさすがですねー！";
+                msg = "長期戦、お疲れ様です！ 無傷なんてさすがですねー！";
             } else {
-                msg = "お疲れ様ですー。今回は修理費ゼロ、完璧な仕事ですね！";
+                msg = "お疲れ様です。今回は修理費ゼロ、完璧な仕事ですね！";
             }
         } else {
             if (operationTime >= 120 && damageTaken >= 150) {
-                msg = "あちゃー、欲張って残業するからですよー。はい、回収費と修理費、ドーンと引かせていただきますねー。";
+                msg = "傭兵さん、残業しすぎです！ 待つ方の身にもなってください。修理費はいただきますからね！";
             } else {
-                msg = "あー、帰還お疲れ様です。結構機体がボロボロですねぇ……。修理費、引かせていただきますねー。";
+                msg = "帰還お疲れ様です！ 機体の修理はしておくので、任せてください。";
             }
         }
     } else {
         if (operationTime <= 30 && netProfit < 0) {
-            msg = "あちゃー、派手にやられましたね。今月は赤字ですよ？ 死ぬ気で働いて返してくださいねー。";
+            msg = "……派手にやられましたね。これでは今月は赤字ですよ？ 次は頑張りましょうね！";
         } else {
             msg = "傭兵さん、生きててよかったです！ でも修理費で赤字かも……次は気をつけてくださいね！";
         }
@@ -369,7 +369,7 @@ window.addEventListener('keydown', e => {
             player.landingPhase = 'NONE';
             player.landingTimer = 0;
             player.landingForClear = false;
-            Cielo.play("ミッション・クリアしたことにしました");
+            Cielo.play("ミッション・クリアしたことにしました！");
         }
     }
 });
