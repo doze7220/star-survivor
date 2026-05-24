@@ -1,5 +1,14 @@
 const changelog = [
   {
+    version: "v0.5.22",
+    date: "2026-05-25",
+    description: "Refactoring: Unified multiple init functions into a single file.",
+    details: [
+      "【リファクタリング】`js/utils/` 配下に分散していた初期化関数（`initPlayer`, `initEntities`, `initGameState`, `initUI`, `initMothership`）を `init.js` 1ファイルに統合",
+      "【最適化】`index.html` のscriptタグの読み込みを削減"
+    ]
+  },
+  {
     version: "v0.5.21",
     date: "2026-05-24",
     description: "Refactoring Phase 3 Addendum 3: Dedicated Title and Result opaque backgrounds.",
