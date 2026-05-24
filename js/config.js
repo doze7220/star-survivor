@@ -30,10 +30,10 @@ const CONFIG = {
     ENEMY_MAX_COUNT: 5,          // 敵の同時出現最大数（初期値）
     ENEMY_SIZE_W: 30,             // 敵機のグラフィック幅
     ENEMY_SIZE_H: 36,             // 敵機のグラフィック高
-    ENEMY_ACCEL: 0.2,             // 敵機の加速度（慣性移動用）
-    ENEMY_MAX_SPEED: 5.0,         // 敵機の最高速度
+    ENEMY_ACCEL: 0.15,             // 敵機の加速度（慣性移動用）(iv:0.2)
+    ENEMY_MAX_SPEED: 2.5,         // 敵機の最高速度 (iv:5)
     ENEMY_FIRE_RATE: 40,          // 敵機の射撃間隔（フレーム数）
-    ENEMY_BULLET_SPEED: 10,       // 敵の弾速
+    ENEMY_BULLET_SPEED: 5,        // 敵の弾速(iv:10)
     ENEMY_BASE_HP: 20,            // 敵機の初期HP（レベル1時点）
     ENEMY_HP_LEVEL_MULT: 5,       // プレイヤーのレベル上昇に伴う敵HPの増加量（レベルごとに加算）
     ENEMY_SPAWN_BASE_RATE: 0.04,  // 敵機の基本スポーン率（毎フレームごとの出現判定確率）

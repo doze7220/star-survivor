@@ -1,5 +1,23 @@
 const changelog = [
   {
+    version: "v0.5.11",
+    date: "2026-05-24",
+    description: "Refactoring Phase 2g: Centralized entity death logic into eliminator.",
+    details: [
+      "【リファクタリング】`main.js` から各エンティティ（自機、母艦、一般戦闘機）の死亡・撃破ロジックとアイテム生成を抽出し、`js/eliminator.js` に `eliminator` として分離",
+      "【仕様変更】すべてのダメージ判定からの直接死亡を廃止し、更新ループの最後で一元的に死亡処理を行う ECS 風のアーキテクチャに変更"
+    ]
+  },
+  {
+    version: "v0.5.10",
+    date: "2026-05-24",
+    description: "Refactoring Phase 2f: Extracted effect updating and drawing logic.",
+    details: [
+      "【リファクタリング】`main.js` からパーティクルの更新処理と、各種エフェクト（パーティクル、デブリ、爆発）の描画ロジックを抽出し、`js/effects.js` に `EffectManager` として分離（カプセル化）",
+      "【バグ修正】弾やミサイルが敵に命中した際、誤ったインデックスで `killEnemy` が呼ばれ、意図しない敵が消滅するバグを修正"
+    ]
+  },
+  {
     version: "v0.5.09",
     date: "2026-05-24",
     description: "Refactoring Phase 2e: Extracted HUD and UI drawing logic.",

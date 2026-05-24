@@ -581,42 +581,9 @@ function spawnExplosion(x, y, isPlayer = false, isFlavor = false, sizeMultiplier
     });
 }
 
-function spawnEnemyDropItems(x, y, baseVx = 0, baseVy = 0) {
-    const spawnItem = (kind, sprite, exp, heal, sizeMult = 1) => {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 3 + Math.random() * 4;
-        entities.gems.push({
-            x: x,
-            y: y,
-            vx: baseVx * 0.35 + Math.cos(angle) * speed,
-            vy: baseVy * 0.35 + Math.sin(angle) * speed,
-            kind: kind,
-            exp: exp,
-            heal: heal,
-            locked: false,
-            speed: CONFIG.GEM_MAGNET_BASE_SPEED,
-            sprite: sprite,
-            sizeMult: sizeMult
-        });
-    };
-
-    spawnItem('EXP', SpriteCache.gem, CONFIG.GEM_BASE_EXP, 0, 1.0);
-
-    if (Math.random() < CONFIG.HEAL_ITEM_DROP_CHANCE) {
-        spawnItem('HEAL', SpriteCache.gemHeal, 0, CONFIG.HEAL_ITEM_AMOUNT, 1.0);
-    }
-
-    if (Math.random() < CONFIG.BIG_EXP_DROP_CHANCE) {
-        spawnItem('BIG_EXP', SpriteCache.gemBigExp, CONFIG.GEM_BASE_EXP * CONFIG.BIG_EXP_MULT, 0, CONFIG.BIG_EXP_SIZE_MULT);
-    }
-}
-
 function clearAllEnemiesInstantly() {
     for (let i = entities.enemies.length - 1; i >= 0; i--) {
-        const e = entities.enemies[i];
-        spawnExplosion(e.x, e.y);
-        spawnDeathDebris(e.x, e.y, getEnemyColor(e), e.vx, e.vy);
-        entities.enemies.splice(i, 1);
+        entities.enemies[i].hp = 0;
     }
     entities.enemyBullets.length = 0;
     GAME.killCount = Math.max(GAME.killCount, CONFIG.MISSION_QUOTA);
@@ -627,26 +594,6 @@ function getEnemyColor(e) {
     if (e.personality === 'RAMMER') return CONFIG.COLOR_ENEMY_RAMMER;
     if (e.personality === 'SNIPER') return CONFIG.COLOR_ENEMY_SNIPER;
     return CONFIG.COLOR_ENEMY_DOGFIGHTER;
-}
-
-// 敵機の爆破・撃破プロセス
-function killEnemy(e, i) {
-    let enemyColor = getEnemyColor(e);
-    spawnExplosion(e.x, e.y);
-    spawnDeathDebris(e.x, e.y, enemyColor, e.vx, e.vy);
-    spawnEnemyDropItems(e.x, e.y, e.vx, e.vy);
-
-    GAME.credits += 100;
-    GAME.killCount++;
-
-    // 撃破時通信
-    if (GAME.killCount === 5) {
-        Cielo.play("敵5機撃破！あと半分ですよ！");
-    } else if (GAME.killCount === CONFIG.MISSION_QUOTA) {
-        Cielo.play("ノルマ達成ですー、無理せず帰ってきてくださいね");
-    }
-
-    entities.enemies.splice(i, 1);
 }
 
 // ==========================================
@@ -681,20 +628,7 @@ function damagePlayer(amount) {
 }
 
 // 自機の爆破・死亡プロセス開始
-function triggerPlayerDeath() {
-    if (GAME.isPlayerDying) return;
-    GAME.isPlayerDying = true;
-    player.vx = 0;
-    player.vy = 0;
-
-    Cielo.play("傭兵さん！傭兵さーーん！");
-
-    // 自機の爆発
-    spawnExplosion(player.x, player.y, true);
-
-    // 自機の慣性を引き継いだ緑色の有害破片を撒き散らす
-    spawnDeathDebris(player.x, player.y, '#0f0', player.vx, player.vy);
-}
+// triggerPlayerDeath was unified into eliminator.processEntityDeath
 
 // ==========================================
 // 3. ゲームループとロジック
@@ -1146,13 +1080,8 @@ function update() {
         });
     }
 
-    // --- エンティティの更新 ---
-    for (let i = entities.particles.length - 1; i >= 0; i--) {
-        let p = entities.particles[i];
-        p.x += p.vx; p.y += p.vy;
-        p.life -= p.decay || CONFIG.PARTICLE_DECAY;
-        if (p.life <= 0) entities.particles.splice(i, 1);
-    }
+    // --- エフェクトの更新 ---
+    EffectManager.update(entities);
 
     // デブリ（破片）の更新と衝突判定
     for (let i = entities.debris.length - 1; i >= 0; i--) {
@@ -1344,13 +1273,7 @@ function update() {
                         spawnDebris(e.x, e.y, enemyColor, 3);
                         exp.damagedEntities.add(e);
 
-                        if (e.hp <= 0) {
-                            // 連鎖誘発爆発！
-                            spawnExplosion(e.x, e.y);
-                            spawnDeathDebris(e.x, e.y, enemyColor, e.vx, e.vy);
-                            spawnEnemyDropItems(e.x, e.y, e.vx, e.vy);
-                            entities.enemies.splice(j, 1);
-                        }
+                        // HPが0以下の敵は、後段の生存チェックルーチンで一括して死亡処理される
                     }
                 }
             }
@@ -1386,7 +1309,7 @@ function update() {
             spawnDebris(player.x, player.y, '#0f0', 3 + Math.floor(Math.random() * 2));
 
             if (playerStats.hp <= 0) {
-                triggerPlayerDeath();
+                eliminator.processEntityDeath(player, 'PLAYER');
             }
             continue;
         }
@@ -1459,9 +1382,7 @@ function update() {
                 e.flashTimer = CONFIG.FLASH_DURATION;
                 spawnDebris(e.x, e.y, '#fff', 3);
                 hit = true;
-                if (e.hp <= 0) {
-                    killEnemy(e, j);
-                }
+                // HPが0以下の敵は、後段の生存チェックルーチンで死亡処理される
                 break;
             }
         }
@@ -1903,7 +1824,6 @@ function update() {
                 spawnDebris(e.x, e.y, enemyColor, 3 + Math.floor(Math.random() * 2));
 
                 if (e.hp <= 0) {
-                    killEnemy(e, i);
                     hit = true;
                     break;
                 }
@@ -1961,7 +1881,7 @@ function update() {
 
         // 生存チェック（衝突等でHPが0になった場合の一括処理）
         if (e.hp <= 0) {
-            killEnemy(e, i);
+            eliminator.processEntityDeath(e, 'FIGHTER', i);
             continue;
         }
     }
@@ -2064,18 +1984,7 @@ function update() {
         }
 
         if (em.hp <= 0) {
-            em.isDead = true;
-            // 大型フレア (サイズ2倍、ダメージ2倍、継続時間5秒)
-            spawnExplosion(em.x, em.y, false, false, 2.0, 2.5, false, 2.0);
-
-            // 中フレア2〜3個を少し離れた位置に発生させる
-            const numFlares = 2 + Math.floor(Math.random() * 2);
-            for (let k = 0; k < numFlares; k++) {
-                const angle = Math.random() * Math.PI * 2;
-                const dist = Math.random() * em.radius;
-                spawnExplosion(em.x + Math.cos(angle) * dist, em.y + Math.sin(angle) * dist);
-            }
-            Cielo.play("敵母艦の破壊を確認。作戦完了です！");
+            eliminator.processEntityDeath(em, 'MOTHERSHIP');
         }
     }
 
@@ -2171,7 +2080,7 @@ function update() {
 
     // 万が一の自機HPゼロ判定のセーフガード
     if (playerStats.hp <= 0 && !GAME.isPlayerDying) {
-        triggerPlayerDeath();
+        eliminator.processEntityDeath(player, 'PLAYER');
     }
 
     // --- Update Engine Trails ---
@@ -3079,49 +2988,8 @@ function draw() {
         ctx.drawImage(sprite, g.x - drawSize / 2, g.y - drawSize / 2);
     });
 
-    entities.particles.forEach(p => {
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        if (p.type === 'DEBRIS_SMOKE') {
-            // 半透明の煙（灰色の●で表現、拡大しながら薄れて消える）
-            const progress = 1.0 - (p.life / p.maxLife); // 0.0 〜 1.0
-            const scale = 1.0 + progress * 1.0; // 1倍から2倍へ拡大
-            ctx.globalAlpha = Math.max(0, p.life);
-            ctx.scale(scale, scale);
-            ctx.fillStyle = '#888'; // 灰色
-            ctx.beginPath();
-            ctx.arc(0, 0, p.baseSize / 2, 0, Math.PI * 2);
-            ctx.fill();
-        } else if (p.type === 'ENEMY_THRUSTER') {
-            ctx.globalAlpha = Math.max(0, p.life);
-            const scale = Math.max(0.1, p.life);
-            ctx.scale(scale, scale);
-            ctx.drawImage(SpriteCache.particleEnemy, -SpriteCache.particleEnemy.width / 2, -SpriteCache.particleEnemy.height / 2);
-        } else if (p.type === 'SMOKE') {
-            ctx.globalAlpha = Math.max(0, p.life);
-            const scale = Math.max(0.1, p.life);
-            ctx.scale(scale, scale);
-            ctx.fillStyle = p.color || '#fff';
-            ctx.beginPath();
-            ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
-            ctx.fill();
-        } else {
-            ctx.globalAlpha = Math.max(0, p.life);
-            const scale = Math.max(0.1, p.life);
-            ctx.scale(scale, scale);
-            ctx.drawImage(SpriteCache.particlePlayer, -SpriteCache.particlePlayer.width / 2, -SpriteCache.particlePlayer.height / 2);
-        }
-        ctx.restore();
-    });
-    ctx.globalAlpha = 1.0;
-
-    // デブリ（破片）の描画（最後の30%でフェードアウト）
-    entities.debris.forEach(d => {
-        ctx.fillStyle = d.color;
-        ctx.globalAlpha = Math.min(1.0, d.life / 0.3);
-        ctx.fillRect(d.x - d.size / 2, d.y - d.size / 2, d.size, d.size);
-    });
-    ctx.globalAlpha = 1.0;
+    // パーティクル・デブリの描画 (背景レイヤー)
+    EffectManager.draw(ctx, entities, 'background');
 
     // 敵の弾描画 (細い赤い楕円形＋白いコアのSF風レーザー)
     entities.enemyBullets.forEach(b => {
@@ -3271,10 +3139,8 @@ function draw() {
         HUDManager.draw(ctx, player, GAME);
     }
 
-    // 爆発の描画 (共通関数を利用)
-    entities.explosions.forEach(exp => {
-        drawExplosion(ctx, exp);
-    });
+    // 爆発の描画 (前面レイヤー)
+    EffectManager.draw(ctx, entities, 'foreground');
 
     ctx.restore(); // カメラ適用終了
 
