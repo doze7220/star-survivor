@@ -144,7 +144,7 @@ function drawOverlay(ctx, GAME) {
         ctx.fillStyle = '#666';
         ctx.font = 'bold 12px Courier New';
         ctx.textAlign = 'right';
-        ctx.fillText('v0.3.3 Alpha', GAME.width - 20, GAME.height - 20);
+        ctx.fillText(changelog[0].version, GAME.width - 20, GAME.height - 20);
 
         // 出撃決定テキスト
         ctx.textAlign = 'center';

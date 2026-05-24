@@ -1,5 +1,14 @@
 const changelog = [
   {
+    version: "v0.5.24",
+    date: "2026-05-25",
+    description: "Refactoring: Dynamic version rendering on title screen.",
+    details: [
+      "【UI】`index.html` の `<title>` タグからバージョン表記を削除し、ゲーム名のみに変更",
+      "【UI】タイトル画面のバージョン表記（右下）を、ハードコードから `changelog.js` の最新バージョンを動的に読み取って表示する仕様へ変更"
+    ]
+  },
+  {
     version: "v0.5.23",
     date: "2026-05-25",
     description: "Refactoring: Unified multiple input handlers into a single file.",
