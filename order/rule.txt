@@ -60,3 +60,12 @@ index.html
 
 【出力要件】
 - 敵の移動処理・座標更新を担当している関数（`Enemy` クラスの `update` や敵ループ部分など）の修正後のコードブロックのみを出力してください。
+
+Gemini 3.5 Flash (High)
+Gemini 3.1 Pro (Low)
+Gemini 3.1 Pro (High)
+Claude Sonnet 4.6 (Thinking)
+Claude Opus 4.6 (Thinking)
+GPT-OSS 120B (Medium)
+Gemini 3.5 Flash (Medium)
+

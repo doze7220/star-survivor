@@ -1,6 +1,15 @@
 // changelog.js
 const CHANGELOG = [
   {
+    version: "v0.5.03",
+    date: "2026-05-24",
+    changes: [
+      "巨大な単一ファイル（index.html）を構成要素ごとに物理的に分割",
+      "CSSを style.css として分離",
+      "JavaScript（ゲームロジック本体）を main.js として分離"
+    ]
+  },
+  {
     version: "v0.5.02",
     date: "2026-05-24",
     changes: [
