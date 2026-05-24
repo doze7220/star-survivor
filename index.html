@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VANGUARDRIFTER - v0.5.00</title>
+    <title>VANGUARDRIFTER - v0.5.04</title>
     <link rel="stylesheet" href="style.css">
     <script>
         window.addEventListener('error', function (e) {
@@ -22,14 +22,17 @@
     <div id="ui-layer">
         <div id="credits-panel" style="display: none;">BOUNTY: <span id="ui-credits">0</span> c</div>
         <div id="cielo-comm" style="display: none;"></div>
-        <div id="keybind-panel">W/S:前進・後退 A/D:左右旋回
-            RClick&Space:バルカン E:ミサイル Shift:ブースト
-            C:通信 X:エイム切替 Q:タクティカル・ブレーキ
-            DEBUG - 1:HP全快 2:リスポーン切替 3:敵全滅 4:ミッション強制クリア 5:レベルアップ 6:敵母艦破壊</div>
+        <div id="keybind-panel">[W]前進 [S]後退 [A]左旋回 [D]右旋回
+            [Space]バルカン [E]ミサイル [Shift]ブースト
+            [C]通信 [X]エイム切替 [Q]タクティカル・ブレーキ
+            [1]HP全快 [2]リスポーン切替 [3]敵全滅 [4]ミッション強制クリア [5]レベルアップ [6]敵母艦破壊</div>
 
         <div id="stats-panel" style="display: none;"></div>
     </div>
 
+    <script src="config.js"></script>
+    <script src="constants.js"></script>
+    <script src="asset.js"></script>
     <script src="main.js"></script>
 </body>
 

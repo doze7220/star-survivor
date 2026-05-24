@@ -1,6 +1,17 @@
 // changelog.js
 const CHANGELOG = [
   {
+    version: "v0.5.04",
+    date: "2026-05-24",
+    changes: [
+      "Ship基底クラスの定義（共通プロパティ: x, y, vx, vy, hp, maxHp, flashTimer, heat, isOverheated, overheatTimer, trailHistory）",
+      "PlayerShip派生クラスの定義（自機固有プロパティの集約・コンストラクタ初期化）",
+      "EnemyShip派生クラスの定義（敵機固有プロパティの集約・コンストラクタ初期化）",
+      "player変数をPlayerShipインスタンスに変更",
+      "敵スポーン処理をEnemyShipインスタンス生成に変更"
+    ]
+  },
+  {
     version: "v0.5.03",
     date: "2026-05-24",
     changes: [
