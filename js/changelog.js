@@ -1,5 +1,16 @@
 const changelog = [
   {
+    version: "v0.5.26",
+    date: "2026-05-25",
+    description: "Refactoring: Restructured utils directory into renderers and systems.",
+    details: [
+      "【リファクタリング】`js/utils/` に散在していた描画やシステム関連のファイルを適切なドメインへ再配置",
+      "【移動】描画処理群を `js/renderers/` へ移動 (`drawBackground.js`, `drawEffects.js`, `drawHUD.js`, `drawOverlay.js`)",
+      "【移動】ゲーム状態管理系を `js/systems/` へ移動 (`handleInput.js`, `init.js`)",
+      "【最適化】`utils/` には状態を持たない純粋なユーティリティ (`utils.js`, `asset.js`) のみを残すよう構造を洗練"
+    ]
+  },
+  {
     version: "v0.5.25",
     date: "2026-05-25",
     description: "Refactoring: Restructured js directory into data, systems, and utils.",
