@@ -1612,9 +1612,8 @@ function update() {
         let avoidY = 0;
         const eSpeed = Math.hypot(e.vx, e.vy);
 
-        const maxSpd = playerStats.maxSpeed * (e.spdMult || 1.0);
-        const blend = 0.04 * (e.turnMult || 1.0);
-        const accel = maxSpd * blend; // 障害物回避時の加速度として利用
+        const maxSpd = CONFIG.ENEMY_MAX_SPEED * (e.spdMult || 1.0);
+        const avoidAccel = CONFIG.ENEMY_ACCEL * (e.turnMult || 1.0); // 障害物回避時の加速度として利用
 
         if (eSpeed > 0.2) {
             const dirX = e.vx / eSpeed;
@@ -1687,7 +1686,7 @@ function update() {
                 const steerY = dirX * steerSide;
 
                 // 障害物に近づくほど強い回避力を適用
-                const avoidForce = (1.0 - minThreatDist / lookAheadDist) * accel * 2.5;
+                const avoidForce = (1.0 - minThreatDist / lookAheadDist) * avoidAccel * 2.5;
                 avoidX = steerX * avoidForce;
                 avoidY = steerY * avoidForce;
             }
@@ -1703,8 +1702,8 @@ function update() {
         // 目標への進行角度
         const driveAngle = Math.atan2(targetVy, targetVx);
 
-        // 加速度係数（プレイヤー機の挙動スケールに合わせる）
-        const accelForce = maxSpd * 0.05;
+        // 加速度係数
+        const accelForce = CONFIG.ENEMY_ACCEL * (e.spdMult || 1.0);
 
         // ベクトルへの直接加算による慣性駆動
         e.vx += Math.cos(driveAngle) * accelForce;
@@ -1733,20 +1732,10 @@ function update() {
         }
         e.aimOffsetTimer--;
 
-        e.angle = Math.atan2(edy, edx) + e.aimOffset;
+        const targetAimAngle = Math.atan2(edy, edx) + e.aimOffset;
+        const eHandling = CONFIG.ENEMY_HANDLING * (e.turnMult || 1.0);
+        e.angle = rotateTowards(e.angle, targetAimAngle, eHandling);
 
-        // 敵のスラスターパーティクル (プレイヤーより控えめに発生)
-        if (Math.random() < 0.3) {
-            const emitX = e.x - Math.cos(e.angle) * (CONFIG.ENEMY_SIZE_W / 2);
-            const emitY = e.y - Math.sin(e.angle) * (CONFIG.ENEMY_SIZE_W / 2);
-            entities.particles.push({
-                x: emitX, y: emitY,
-                vx: e.vx * CONFIG.PARTICLE_VEL_MULT - Math.cos(e.angle) * CONFIG.PARTICLE_SPEED + (Math.random() - 0.5) * CONFIG.PARTICLE_SPREAD,
-                vy: e.vy * CONFIG.PARTICLE_VEL_MULT - Math.sin(e.angle) * CONFIG.PARTICLE_SPEED + (Math.random() - 0.5) * CONFIG.PARTICLE_SPREAD,
-                life: 0.8,
-                type: 'ENEMY_THRUSTER'
-            });
-        }
 
         // --- 4. 射撃処理とヒートゲージ管理（揺らぎを持たせる） ---
         if (e.isOverheated) {
@@ -2213,8 +2202,6 @@ function checkLevelUp() {
 // TITLE / LEVEL_UP / RESULT 画面の制御ロジック
 // ==========================================
 
-
-
 function updateLevelUpScreen() {
     GAME.levelUpCursorHoverTimer++;
 
@@ -2527,8 +2514,6 @@ function drawLevelUpScreen() {
     });
 }
 
-
-
 // ==========================================
 // 5. 描画フェーズ (Rendering)
 // ==========================================
@@ -2536,8 +2521,6 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 canvas.width = GAME.width;
 canvas.height = GAME.height;
-
-
 
 const CommStateManager = {
     handleInput: function (e) {
@@ -2714,113 +2697,8 @@ function draw() {
     ctx.translate(CONFIG.MOTHERSHIP_X, CONFIG.MOTHERSHIP_Y);
     ctx.rotate(-Math.PI / 2); // 上向き
 
-    // わずかな非対称性を持たせるため、片側にセンサーアンテナを追加
-    ctx.strokeStyle = '#556677';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(-50, 60);
-    ctx.lineTo(-30, 100);
-    ctx.lineTo(20, 100);
-    ctx.stroke();
-    // アンテナ先端の点滅
-    ctx.fillStyle = Date.now() % 1000 < 500 ? '#f00' : '#556677';
-    ctx.beginPath();
-    ctx.arc(20, 100, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 外周構造 (防御・損傷状態の可視化領域)
-    ctx.fillStyle = '#1a1f24';
-    ctx.strokeStyle = '#334455';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-120, -70);
-    ctx.lineTo(40, -70);
-    ctx.lineTo(80, -40);
-    ctx.lineTo(80, 40);
-    ctx.lineTo(40, 70);
-    ctx.lineTo(-120, 70);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // 居住区の窓明かり（中に人がいる気配）
-    ctx.fillStyle = '#ffffaa';
-    ctx.globalAlpha = 0.8;
-    for (let i = 0; i < 3; i++) {
-        ctx.fillRect(-100 + i * 25, -62, 8, 4);
-        ctx.fillRect(-100 + i * 25, 58, 8, 4);
-    }
-    ctx.globalAlpha = 1.0;
-
-    // 補助モジュール1 (上側)
-    ctx.fillStyle = '#222d36';
-    ctx.fillRect(-80, -90, 60, 20);
-    ctx.strokeRect(-80, -90, 60, 20);
-    // 補助モジュール2 (下側・少し形状を変えて非対称に)
-    ctx.fillRect(-100, 70, 80, 25);
-    ctx.strokeRect(-100, 70, 80, 25);
-
-    // 中央コア (生命維持・システム中枢)
-    ctx.fillStyle = '#0f141a';
-    ctx.beginPath();
-    ctx.arc(-20, 0, 45, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#0ff';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    // コアの発光 (ゆっくりと脈動させる)
-    const pulse = Math.sin(Date.now() / 1000) * 0.5 + 0.5;
-    ctx.fillStyle = `rgba(0, 255, 255, ${0.1 + pulse * 0.1})`;
-    ctx.beginPath();
-    ctx.arc(-20, 0, 35 + pulse * 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#0ff';
-    ctx.beginPath();
-    ctx.arc(-20, 0, 15, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 発着ドック (カタパルト) - 横幅を2.5倍に拡大
-    const catW = 150;
-    const catH = CONFIG.PLAYER_SIZE_W * 2.5; // 75
-    ctx.fillStyle = '#111';
-    ctx.fillRect(80, -catH / 2, catW, catH);
-    ctx.strokeStyle = '#0ff';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(80, -catH / 2, catW, catH);
-
-    // カタパルト上の誘導ライン (発光)
-    ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([10, 10]);
-    ctx.beginPath();
-    ctx.moveTo(80, 0);
-    ctx.lineTo(80 + catW, 0);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // ドックのゲート発光
-    ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
-    ctx.fillRect(80, -catH / 2, 10, catH);
-
-    // エンジン部 (後方)
-    ctx.fillStyle = '#111';
-    ctx.fillRect(-140, -30, 20, 60);
-    // エンジン発光
-    ctx.fillStyle = 'rgba(0, 255, 255, 0.6)';
-    ctx.beginPath();
-    ctx.ellipse(-145, 0, 10, 25, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 機体名のペイント
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-    ctx.font = 'bold 20px Courier New';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.save();
-    ctx.rotate(Math.PI / 2);
-    ctx.fillText('A.GARAGE', 0, 90);
-    ctx.restore();
+    // スプライトキャッシュを描画 (cx=150, cy=100 なので -150, -100 を指定)
+    ctx.drawImage(SpriteCache.alliedMothership, -150, -100);
 
     ctx.restore();
 
@@ -2832,102 +2710,9 @@ function draw() {
         // 敵母艦の向き（Aガレージは-Math.PI/2だが、敵母艦は下向きなら+Math.PI/2とするが、リスポーン位置が上なのでプレイヤーへ向けるか、固定でMath.PI/2にする）
         ctx.rotate(Math.PI / 2); // 下向き
 
-        // センサーアンテナ (少し暗い色)
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(-50, 60);
-        ctx.lineTo(-30, 100);
-        ctx.lineTo(20, 100);
-        ctx.stroke();
-        // アンテナ先端の点滅 (赤く高速)
-        ctx.fillStyle = Date.now() % 500 < 250 ? '#f00' : '#333';
-        ctx.beginPath();
-        ctx.arc(20, 100, 4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 外周構造 (黒系・暗灰色)
-        ctx.fillStyle = em.flashTimer > 0 ? '#fff' : '#0a0a0a';
-        ctx.strokeStyle = '#222';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-120, -70);
-        ctx.lineTo(40, -70);
-        ctx.lineTo(80, -40);
-        ctx.lineTo(80, 40);
-        ctx.lineTo(40, 70);
-        ctx.lineTo(-120, 70);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        // 居住区の窓明かり（禍々しい赤色）
-        ctx.fillStyle = '#ff2222';
-        ctx.globalAlpha = 0.8;
-        for (let i = 0; i < 3; i++) {
-            ctx.fillRect(-100 + i * 25, -62, 8, 4);
-            ctx.fillRect(-100 + i * 25, 58, 8, 4);
-        }
-        ctx.globalAlpha = 1.0;
-
-        // 補助モジュール
-        ctx.fillStyle = em.flashTimer > 0 ? '#fff' : '#111';
-        ctx.fillRect(-80, -90, 60, 20);
-        ctx.strokeRect(-80, -90, 60, 20);
-        ctx.fillRect(-100, 70, 80, 25);
-        ctx.strokeRect(-100, 70, 80, 25);
-
-        // 中央コア (敵コアは赤系)
-        ctx.fillStyle = '#1a0000';
-        ctx.beginPath();
-        ctx.arc(-20, 0, 45, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#f00';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
-        // コアの発光 (高速脈動)
-        const emPulse = Math.sin(Date.now() / 200) * 0.5 + 0.5;
-        ctx.fillStyle = `rgba(255, 0, 0, ${0.1 + emPulse * 0.1})`;
-        ctx.beginPath();
-        ctx.arc(-20, 0, 35 + emPulse * 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#f00';
-        ctx.beginPath();
-        ctx.arc(-20, 0, 15, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 発着ドック (カタパルト)
-        const catW = 150;
-        const catH = CONFIG.PLAYER_SIZE_W * 2.5; // 75
-        ctx.fillStyle = '#050505';
-        ctx.fillRect(80, -catH / 2, catW, catH);
-        ctx.strokeStyle = '#f00';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(80, -catH / 2, catW, catH);
-
-        // カタパルト上の誘導ライン (赤い発光)
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([10, 10]);
-        ctx.beginPath();
-        ctx.moveTo(80, 0);
-        ctx.lineTo(80 + catW, 0);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // ドックのゲート発光
-        ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
-        ctx.fillRect(80, -catH / 2, 10, catH);
-
-        // エンジン部 (後方)
-        ctx.fillStyle = '#000';
-        ctx.fillRect(-140, -30, 20, 60);
-        // エンジン発光
-        ctx.fillStyle = 'rgba(255, 50, 0, 0.6)';
-        ctx.beginPath();
-        ctx.ellipse(-145, 0, 10, 25, 0, 0, Math.PI * 2);
-        ctx.fill();
+        const sprite = em.flashTimer > 0 ? SpriteCache.enemyMothershipFlash : SpriteCache.enemyMothership;
+        // cx=150, cy=100 in the 400x200 sprite, so draw at -150, -100
+        ctx.drawImage(sprite, -150, -100);
 
         // HPバーの描画
         ctx.save();

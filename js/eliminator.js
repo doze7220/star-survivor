@@ -88,7 +88,7 @@ const eliminator = {
             if (GAME.killCount === 5) {
                 Cielo.play("敵5機撃破！あと半分ですよ！");
             } else if (GAME.killCount === CONFIG.MISSION_QUOTA) {
-                Cielo.play("ノルマ達成ですー、無理せず帰ってきてくださいね");
+                Cielo.play("ノルマ達成です、無理せず帰ってきてくださいね");
             }
 
             if (index !== undefined) {

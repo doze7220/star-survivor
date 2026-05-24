@@ -10,11 +10,13 @@ const SpriteCache = {
     bullet: null,
     enemyBullet: null,
     particlePlayer: null,
-    particleEnemy: null,
     gem: null,
     gemHeal: null,
     gemBigExp: null,
     debrisSmoke: null, // デブリの煙用キャッシュ
+    enemyMothership: null,
+    enemyMothershipFlash: null,
+    alliedMothership: null,
 
     init: function () {
         this.player = this.createShip('#0f0', CONFIG.PLAYER_SIZE_W, CONFIG.PLAYER_SIZE_H);  // 緑の自機
@@ -25,11 +27,13 @@ const SpriteCache = {
         this.bullet = this.createCircle('#ff0', CONFIG.BULLET_SIZE);     // 黄色の自機ショット
         this.enemyBullet = this.createCircle('#f00', CONFIG.BULLET_SIZE); // 赤色の敵機ショット
         this.particlePlayer = this.createCircle(CONFIG.COLOR_PARTICLE_PLAYER, CONFIG.PARTICLE_SIZE);
-        this.particleEnemy = this.createCircle(CONFIG.COLOR_PARTICLE_ENEMY, CONFIG.PARTICLE_SIZE);
         this.gem = this.createDiamond('#0ff', CONFIG.GEM_SIZE);      // シアンの経験値ジェム
         this.gemHeal = this.createDiamond('#f80', CONFIG.GEM_SIZE);  // オレンジのHP回復アイテム
         this.gemBigExp = this.createBigExpGem(Math.round(CONFIG.GEM_SIZE * CONFIG.BIG_EXP_SIZE_MULT));
         this.debrisSmoke = this.createCircle(CONFIG.DEBRIS_SMOKE_COLOR, CONFIG.DEBRIS_SMOKE_SIZE); // デブリの煙
+        this.enemyMothership = this.createEnemyMothership(false);
+        this.enemyMothershipFlash = this.createEnemyMothership(true);
+        this.alliedMothership = this.createAlliedMothership();
     },
 
     createShip: function (color, w, h, isFlash = false) {
@@ -126,6 +130,250 @@ const SpriteCache = {
         ctx.moveTo(-half * 0.12, half * 0.12);
         ctx.lineTo(half * 0.12, -half * 0.12);
         ctx.stroke();
+
+        ctx.restore();
+        return c;
+    },
+
+    createEnemyMothership: function (isFlash = false) {
+        const w = 400;
+        const h = 200;
+        const cx = 150;
+        const cy = 100;
+
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        
+        ctx.save();
+        ctx.translate(cx, cy);
+
+        // センサーアンテナ
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(-50, 60);
+        ctx.lineTo(-30, 100);
+        ctx.lineTo(20, 100);
+        ctx.stroke();
+        // アンテナ先端
+        ctx.fillStyle = '#f00';
+        ctx.beginPath();
+        ctx.arc(20, 100, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 外周構造
+        ctx.fillStyle = isFlash ? '#fff' : '#0a0a0a';
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-120, -70);
+        ctx.lineTo(40, -70);
+        ctx.lineTo(80, -40);
+        ctx.lineTo(80, 40);
+        ctx.lineTo(40, 70);
+        ctx.lineTo(-120, 70);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // 居住区の窓明かり
+        if (!isFlash) {
+            ctx.fillStyle = '#ff2222';
+            ctx.globalAlpha = 0.8;
+            for (let i = 0; i < 3; i++) {
+                ctx.fillRect(-100 + i * 25, -62, 8, 4);
+                ctx.fillRect(-100 + i * 25, 58, 8, 4);
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        // 補助モジュール
+        ctx.fillStyle = isFlash ? '#fff' : '#111';
+        ctx.fillRect(-80, -90, 60, 20);
+        ctx.strokeRect(-80, -90, 60, 20);
+        ctx.fillRect(-100, 70, 80, 25);
+        ctx.strokeRect(-100, 70, 80, 25);
+
+        // 中央コア
+        ctx.fillStyle = '#1a0000';
+        ctx.beginPath();
+        ctx.arc(-20, 0, 45, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#f00';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // コアの発光
+        if (!isFlash) {
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
+            ctx.beginPath();
+            ctx.arc(-20, 0, 38, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#f00';
+            ctx.beginPath();
+            ctx.arc(-20, 0, 15, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // 発着ドック (カタパルト)
+        const catW = 150;
+        const catH = 75; // CONFIG.PLAYER_SIZE_W * 2.5
+        ctx.fillStyle = '#050505';
+        ctx.fillRect(80, -catH / 2, catW, catH);
+        ctx.strokeStyle = '#f00';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(80, -catH / 2, catW, catH);
+
+        if (!isFlash) {
+            // カタパルト上の誘導ライン
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(80, 0);
+            ctx.lineTo(80 + catW, 0);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // ドックのゲート発光
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
+            ctx.fillRect(80, -catH / 2, 10, catH);
+        }
+
+        // エンジン部
+        ctx.fillStyle = '#000';
+        ctx.fillRect(-140, -30, 20, 60);
+        if (!isFlash) {
+            ctx.fillStyle = 'rgba(255, 50, 0, 0.6)';
+            ctx.beginPath();
+            ctx.ellipse(-145, 0, 10, 25, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+        return c;
+    },
+
+    createAlliedMothership: function () {
+        const w = 400;
+        const h = 200;
+        const cx = 150;
+        const cy = 100;
+
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        
+        ctx.save();
+        ctx.translate(cx, cy);
+
+        // わずかな非対称性を持たせるため、片側にセンサーアンテナを追加
+        ctx.strokeStyle = '#556677';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(-50, 60);
+        ctx.lineTo(-30, 100);
+        ctx.lineTo(20, 100);
+        ctx.stroke();
+        // アンテナ先端
+        ctx.fillStyle = '#556677'; // 平均的な色で固定
+        ctx.beginPath();
+        ctx.arc(20, 100, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 外周構造 (防御・損傷状態の可視化領域)
+        ctx.fillStyle = '#1a1f24';
+        ctx.strokeStyle = '#334455';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-120, -70);
+        ctx.lineTo(40, -70);
+        ctx.lineTo(80, -40);
+        ctx.lineTo(80, 40);
+        ctx.lineTo(40, 70);
+        ctx.lineTo(-120, 70);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // 居住区の窓明かり（中に人がいる気配）
+        ctx.fillStyle = '#ffffaa';
+        ctx.globalAlpha = 0.8;
+        for (let i = 0; i < 3; i++) {
+            ctx.fillRect(-100 + i * 25, -62, 8, 4);
+            ctx.fillRect(-100 + i * 25, 58, 8, 4);
+        }
+        ctx.globalAlpha = 1.0;
+
+        // 補助モジュール1 (上側)
+        ctx.fillStyle = '#222d36';
+        ctx.fillRect(-80, -90, 60, 20);
+        ctx.strokeRect(-80, -90, 60, 20);
+        // 補助モジュール2 (下側・少し形状を変えて非対称に)
+        ctx.fillRect(-100, 70, 80, 25);
+        ctx.strokeRect(-100, 70, 80, 25);
+
+        // 中央コア (生命維持・システム中枢)
+        ctx.fillStyle = '#0f141a';
+        ctx.beginPath();
+        ctx.arc(-20, 0, 45, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#0ff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // コアの発光 (平均的な脈動状態)
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
+        ctx.beginPath();
+        ctx.arc(-20, 0, 38, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#0ff';
+        ctx.beginPath();
+        ctx.arc(-20, 0, 15, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 発着ドック (カタパルト) - 横幅を2.5倍に拡大
+        const catW = 150;
+        const catH = 75; // CONFIG.PLAYER_SIZE_W * 2.5
+        ctx.fillStyle = '#111';
+        ctx.fillRect(80, -catH / 2, catW, catH);
+        ctx.strokeStyle = '#0ff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(80, -catH / 2, catW, catH);
+
+        // カタパルト上の誘導ライン (発光)
+        ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 10]);
+        ctx.beginPath();
+        ctx.moveTo(80, 0);
+        ctx.lineTo(80 + catW, 0);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // ドックのゲート発光
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
+        ctx.fillRect(80, -catH / 2, 10, catH);
+
+        // エンジン部 (後方)
+        ctx.fillStyle = '#111';
+        ctx.fillRect(-140, -30, 20, 60);
+        // エンジン発光
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.6)';
+        ctx.beginPath();
+        ctx.ellipse(-145, 0, 10, 25, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 機体名のペイント
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.font = 'bold 20px Courier New';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.save();
+        ctx.rotate(Math.PI / 2);
+        ctx.fillText('A.GARAGE', 0, 90);
+        ctx.restore();
 
         ctx.restore();
         return c;

@@ -1,5 +1,24 @@
 const changelog = [
   {
+    version: "v0.5.13",
+    date: "2026-05-24",
+    description: "Refactoring Phase 2h: Cached Enemy Mothership rendering.",
+    details: [
+      "【最適化・リファクタリング】`main.js` にベタ書きされていた敵母艦の複雑な描画（パス描画）を `asset.js` に抽出し、スプライトとしてキャッシュする仕組みに変更。描画負荷を大幅に削減。",
+      "【最適化・リファクタリング】同様に味方母艦（Aガレージ）の描画処理もスプライトキャッシュ化。",
+      "【クリーンアップ】不要になった旧仕様の敵機噴煙エフェクト（`ENEMY_THRUSTER`）の生成および描画処理を削除。"
+    ]
+  },
+  {
+    version: "v0.5.12",
+    date: "2026-05-24",
+    description: "Fixed enemy physics engine scaling.",
+    details: [
+      "【バグ修正】敵機の最高速度および加速度が `CONFIG.ENEMY_MAX_SPEED` や `CONFIG.ENEMY_ACCEL` ではなく、自機の速度に依存して計算されていた不具合を修正。CONFIG値が直接反映されるように変更。",
+      "【仕様変更】敵機の機首旋回速度が瞬間的（直打ち）だった仕様を修正し、`CONFIG.ENEMY_HANDLING`（新規追加）のパラメータに基づいて段階的に旋回するよう変更"
+    ]
+  },
+  {
     version: "v0.5.11",
     date: "2026-05-24",
     description: "Refactoring Phase 2g: Centralized entity death logic into eliminator.",

@@ -27,11 +27,12 @@ const CONFIG = {
     HEAT_OVERHEAT_PENALTY: 180,   // オーバーヒート時の冷却完了までのペナルティ時間（フレーム数。約3秒）
 
     // 【敵機設定】
-    ENEMY_MAX_COUNT: 5,          // 敵の同時出現最大数（初期値）
+    ENEMY_MAX_COUNT: 3,          // 敵の同時出現最大数（初期値）
     ENEMY_SIZE_W: 30,             // 敵機のグラフィック幅
     ENEMY_SIZE_H: 36,             // 敵機のグラフィック高
-    ENEMY_ACCEL: 0.15,             // 敵機の加速度（慣性移動用）(iv:0.2)
-    ENEMY_MAX_SPEED: 2.5,         // 敵機の最高速度 (iv:5)
+    ENEMY_ACCEL: 0.05,             // 敵機の加速度（慣性移動用）(iv:0.2)
+    ENEMY_MAX_SPEED: 1,         // 敵機の最高速度 (iv:5)
+    ENEMY_HANDLING: 0.025,         // 敵機の旋回速度（ラジアン/フレーム）
     ENEMY_FIRE_RATE: 40,          // 敵機の射撃間隔（フレーム数）
     ENEMY_BULLET_SPEED: 5,        // 敵の弾速(iv:10)
     ENEMY_BASE_HP: 20,            // 敵機の初期HP（レベル1時点）

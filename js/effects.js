@@ -44,11 +44,6 @@ const EffectManager = {
                     ctx.beginPath();
                     ctx.arc(0, 0, p.baseSize / 2, 0, Math.PI * 2);
                     ctx.fill();
-                } else if (p.type === 'ENEMY_THRUSTER') {
-                    ctx.globalAlpha = Math.max(0, p.life);
-                    const scale = Math.max(0.1, p.life);
-                    ctx.scale(scale, scale);
-                    ctx.drawImage(SpriteCache.particleEnemy, -SpriteCache.particleEnemy.width / 2, -SpriteCache.particleEnemy.height / 2);
                 } else if (p.type === 'SMOKE') {
                     ctx.globalAlpha = Math.max(0, p.life);
                     const scale = Math.max(0.1, p.life);
