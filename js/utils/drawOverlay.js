@@ -2,6 +2,23 @@ function drawOverlay(ctx, GAME) {
     if (GAME.state === 'TITLE') {
         const contentAlpha = Math.max(0, 1.0 - (GAME.fadeAlpha || 0));
 
+        // 完全に不透明な専用背景を敷いて下層を隠す
+        ctx.fillStyle = '#000510';
+        ctx.fillRect(0, 0, GAME.width, GAME.height);
+
+        // Title専用の星屑背景の描画
+        if (GAME.titleStars) {
+            GAME.titleStars.forEach(s => {
+                ctx.save();
+                ctx.globalAlpha = (s.isBlinking ? s.alpha : s.baseAlpha) * contentAlpha;
+                ctx.fillStyle = s.color;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
         // 遠景爆発の描画（古いパーティクル版）
         entities.particles.forEach(p => {
             if (p.type === 'TITLE_FLAVOR_EXP') {
@@ -180,8 +197,8 @@ function drawOverlay(ctx, GAME) {
         const shakeX = GAME.resultShakeTimer > 0 ? (Math.random() - 0.5) * 8 : 0;
         const shakeY = GAME.resultShakeTimer > 0 ? (Math.random() - 0.5) * 8 : 0;
 
-        // ダークブルー背景
-        ctx.fillStyle = 'rgba(0, 20, 40, 0.92)';
+        // ダークブルー背景（下層を完全に隠す）
+        ctx.fillStyle = 'rgba(0, 20, 40, 1.0)';
         ctx.fillRect(0, 0, GAME.width, GAME.height);
 
         ctx.save();

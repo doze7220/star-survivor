@@ -1,5 +1,15 @@
 const changelog = [
   {
+    version: "v0.5.21",
+    date: "2026-05-24",
+    description: "Refactoring Phase 3 Addendum 3: Dedicated Title and Result opaque backgrounds.",
+    details: [
+      "【仕様変更】`main.js` から削除した `TITLE`・`RESULT` の早期リターンの代わりとして、`drawOverlay.js` にて画面全体を不透明な色で塗りつぶす仕様に変更し、下層レイヤー（ゲーム内エンティティやHUD）を完全に隠蔽",
+      "【追加】タイトル画面専用の独立した星屑背景（`GAME.titleStars`）を追加。色付きで瞬く演出を加え、タイトル画面独自の深みを表現",
+      "【修正】直前に追加した `main.js` 内の `drawGameEntities` と `drawHUD` に対する `if` ガードを撤去（下層レイヤーとして正常に機能する構造に回帰）"
+    ]
+  },
+  {
     version: "v0.5.20",
     date: "2026-05-24",
     description: "Hotfix: Prevented game entities and HUD from rendering during TITLE and RESULT scenes.",

@@ -2,12 +2,33 @@
 
 class TitleScene {
     update() {
-        // 背景の星をゆっくり上から下へスクロール
-        stars.forEach(s => {
-            s.y += s.layer.rate * 0.5;
+        // Title専用の星屑を初期化
+        if (!GAME.titleStars) {
+            GAME.titleStars = [];
+            for (let i = 0; i < 200; i++) {
+                GAME.titleStars.push({
+                    x: Math.random() * GAME.width,
+                    y: Math.random() * GAME.height,
+                    rate: 0.2 + Math.random() * 1.5,
+                    size: 0.5 + Math.random() * 2.0,
+                    baseAlpha: 0.2 + Math.random() * 0.8,
+                    blinkTimer: Math.random() * Math.PI * 2,
+                    isBlinking: Math.random() < 0.3,
+                    color: Math.random() < 0.15 ? '#0ff' : (Math.random() < 0.1 ? '#f80' : '#fff')
+                });
+            }
+        }
+
+        // Title専用の星屑背景をスクロール＆点滅
+        GAME.titleStars.forEach(s => {
+            s.y += s.rate * 0.7;
             if (s.y > GAME.height) {
                 s.y = 0;
                 s.x = Math.random() * GAME.width;
+            }
+            if (s.isBlinking) {
+                s.blinkTimer += 0.03;
+                s.alpha = s.baseAlpha + Math.sin(s.blinkTimer) * 0.2;
             }
         });
 
