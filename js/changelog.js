@@ -1,5 +1,16 @@
 const changelog = [
   {
+    version: "v0.5.25",
+    date: "2026-05-25",
+    description: "Refactoring: Restructured js directory into data, systems, and utils.",
+    details: [
+      "【リファクタリング】`js/` 直下に散在していたファイルを役割ごとに整理・移動",
+      "【移動】設定・データ系を `js/data/` へ移動 (`config.js`, `constants.js`, `stats.js`, `upgradePool.js`)",
+      "【移動】システム管理・マネージャー系を `js/systems/` へ移動 (`input.js`, `hud.js`, `effects.js`, `eliminator.js`, `radar.js`, `map.js`)",
+      "【移動】描画アセット系を `js/utils/` へ移動 (`asset.js`)"
+    ]
+  },
+  {
     version: "v0.5.24",
     date: "2026-05-25",
     description: "Refactoring: Dynamic version rendering on title screen.",
