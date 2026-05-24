@@ -126,6 +126,8 @@ class ResultScene {
         const btnY1 = GAME.height * 0.76;
         const btnY2 = GAME.height * 0.83;
 
+        const mouse = InputManager.getMouse();
+
         if (mouse.x >= btnX && mouse.x <= btnX + btnW) {
             if (mouse.y >= btnY1 && mouse.y <= btnY1 + btnH) {
                 GAME.resultSelection = 0;

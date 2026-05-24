@@ -1,5 +1,13 @@
 const changelog = [
   {
+    version: "v0.5.08",
+    date: "2026-05-24",
+    description: "Refactoring Phase 2d: Extracted input management logic.",
+    details: [
+      "【リファクタリング】`main.js` からキーボード・マウスの入力状態を管理するロジックを抽出し、`js/input.js` に `InputManager` オブジェクトとして分離（カプセル化）"
+    ]
+  },
+  {
     version: "v0.5.07",
     date: "2026-05-24",
     description: "Refactoring Phase 2c: Extracted Title and Result scenes into separate modules.",

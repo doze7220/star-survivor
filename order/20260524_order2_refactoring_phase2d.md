@@ -10,7 +10,7 @@ main.js にある入力管理ロジックを分離し、js/input.js を作成し
    - `InputManager.isPressed(key)`: 特定のキーが押されているか判定。
    - `InputManager.getMouse()`: 現在のマウス状態を取得。
 3. main.js での直接的な `keys[...]` 参照をすべて `InputManager.isPressed(...)` に書き換えること。
-4. 作業内容は meta/changelog.js に記載し、リビジョン番号を上げること。
+4. 作業内容は js/changelog.js に記載し、リビジョン番号を上げること。
 
 ## 【重要】
 * ゲームの操作感は一切変えないこと。

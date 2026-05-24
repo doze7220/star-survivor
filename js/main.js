@@ -103,8 +103,7 @@ const GAME = {
     resultParams: null
 };
 
-const keys = {};
-const mouse = { x: GAME.width / 2, y: GAME.height / 2, leftDown: false, rightDown: false };
+// keys and mouse are now managed by InputManager
 
 // ゲーム初期化関数
 function resetGame() {
@@ -330,8 +329,6 @@ window.addEventListener('keydown', e => {
         return;
     }
 
-    keys[e.code] = true;
-
     if (e.code === 'KeyX' && !e.repeat && GAME.state === 'PLAYING' && !GAME.launchSequence && !player.isLandingSequence && !GAME.isPlayerDying) {
         GAME.controlMode = GAME.controlMode === 'MOUSE_AIM' ? 'SUBSPACE' : 'MOUSE_AIM';
         Cielo.play(GAME.controlMode === 'MOUSE_AIM' ? "マウスエイムモードですー" : "サブスペースモードですー");
@@ -376,17 +373,6 @@ window.addEventListener('keydown', e => {
         }
     }
 });
-window.addEventListener('keyup', e => keys[e.code] = false);
-window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
-window.addEventListener('mousedown', e => {
-    if (e.button === 0) mouse.leftDown = true;
-    if (e.button === 2) mouse.rightDown = true;
-});
-window.addEventListener('mouseup', e => {
-    if (e.button === 0) mouse.leftDown = false;
-    if (e.button === 2) mouse.rightDown = false;
-});
-window.addEventListener('contextmenu', e => e.preventDefault());
 window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -793,7 +779,7 @@ function update() {
             player.boostCooldownTimer = 0;
         }
 
-        const isHoldingShift = (keys['ShiftLeft'] || keys['ShiftRight']) && !player.isOverheated;
+        const isHoldingShift = (InputManager.isPressed('ShiftLeft') || InputManager.isPressed('ShiftRight')) && !player.isOverheated;
         const canBoost = player.boostGauge > 0 && player.boostCooldownTimer <= 0;
         const isBoosting = isHoldingShift && canBoost;
 
@@ -830,8 +816,8 @@ function update() {
     }
 
     if (canControl) {
-        const turnLeft = keys['KeyA'] || keys['ArrowLeft'];
-        const turnRight = keys['KeyD'] || keys['ArrowRight'];
+        const turnLeft = InputManager.isPressed('KeyA') || InputManager.isPressed('ArrowLeft');
+        const turnRight = InputManager.isPressed('KeyD') || InputManager.isPressed('ArrowRight');
         const hasManualTurn = turnLeft || turnRight;
 
         if (turnLeft) {
@@ -844,12 +830,13 @@ function update() {
         if (GAME.controlMode === 'SUBSPACE') {
             player.turretAngle = player.bodyAngle;
         } else {
+            const mouse = InputManager.getMouse();
             const mouseAngle = Math.atan2(mouse.y - GAME.height / 2, mouse.x - GAME.width / 2);
             player.turretAngle = mouseAngle;
         }
 
         let thrust = 0;
-        let moveForward = keys['KeyW'] || keys['ArrowUp'];
+        let moveForward = InputManager.isPressed('KeyW') || InputManager.isPressed('ArrowUp');
 
         // ブースト押下時に前進が押されてない場合は、押されているものとみなして前進ベクトルを追加
         if (player.boostActiveTimer > 0 && !moveForward) {
@@ -881,7 +868,7 @@ function update() {
         }
 
         // 後退（Sキー）時はブレーキおよび微速後退として処理
-        if (keys['KeyS'] || keys['ArrowDown']) {
+        if (InputManager.isPressed('KeyS') || InputManager.isPressed('ArrowDown')) {
             player.vx *= 0.95; // 強いブレーキ効果
             player.vy *= 0.95;
             const reverseAccel = playerStats.moveSpeed * 0.3;
@@ -890,7 +877,7 @@ function update() {
         }
 
         // タクティカル・ブレーキ (Limit Burst: maneuver >= 6)
-        if (keys['KeyQ'] && (playerStats.upgrades.maneuver || 0) >= 6) {
+        if (InputManager.isPressed('KeyQ') && (playerStats.upgrades.maneuver || 0) >= 6) {
             player.vx *= 0.7; // 急激な減衰
             player.vy *= 0.7;
             // ブレーキ時に火花を散らす
@@ -1059,7 +1046,8 @@ function update() {
 
     // --- ヒートゲージ＆自動エイム射撃ロジック ---
     // ヒート管理のため、射撃は「右クリック or スペースキー」を押している間のみ作動（死亡・着艦演出時は撃てない）
-    const isFiringInput = !GAME.isPlayerDying && !player.isLandingSequence && (keys['Space'] || mouse.rightDown);
+    const mouse = InputManager.getMouse();
+    const isFiringInput = !GAME.isPlayerDying && !player.isLandingSequence && (InputManager.isPressed('Space') || mouse.rightDown);
 
     if (player.isOverheated) {
         player.overheatTimer--;
@@ -1107,7 +1095,7 @@ function update() {
     }
 
     // --- ミサイル発射 (E) ---
-    if (!GAME.isPlayerDying && !player.isLandingSequence && (!GAME.commState || GAME.commState === 'INACTIVE') && keys['KeyE'] && player.missileCooldown <= 0 && !player.isOverheated) {
+    if (!GAME.isPlayerDying && !player.isLandingSequence && (!GAME.commState || GAME.commState === 'INACTIVE') && InputManager.isPressed('KeyE') && player.missileCooldown <= 0 && !player.isOverheated) {
         player.missileCooldown = CONFIG.MISSILE_COOLDOWN;
 
         // ロックオン処理 (前方90度)
@@ -2194,8 +2182,8 @@ function update() {
     // --- Update Engine Trails ---
     if (!GAME.isPlayerDying) {
         const isBoosterActive = GAME.launchSequence || (player.boostActiveTimer > 0);
-        const isThrusting = (keys['KeyW'] || keys['ArrowUp'] || keys['KeyS'] || keys['ArrowDown'] ||
-            keys['KeyA'] || keys['ArrowLeft'] || keys['KeyD'] || keys['ArrowRight'] ||
+        const isThrusting = (InputManager.isPressed('KeyW') || InputManager.isPressed('ArrowUp') || InputManager.isPressed('KeyS') || InputManager.isPressed('ArrowDown') ||
+            InputManager.isPressed('KeyA') || InputManager.isPressed('ArrowLeft') || InputManager.isPressed('KeyD') || InputManager.isPressed('ArrowRight') ||
             isBoosterActive);
 
         const backX = player.x - Math.cos(player.bodyAngle) * (CONFIG.PLAYER_SIZE_W / 2);
@@ -2393,6 +2381,7 @@ function updateLevelUpScreen() {
 
     // マウスによるホバー選択
     if (GAME.levelUpState === 'CHOOSING') {
+        const mouse = InputManager.getMouse();
         const startY = GAME.height * 0.35;
         const cardH = 340;
         for (let i = 0; i < 3; i++) {
