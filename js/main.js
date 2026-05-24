@@ -331,7 +331,7 @@ window.addEventListener('keydown', e => {
 
     if (e.code === 'KeyX' && !e.repeat && GAME.state === 'PLAYING' && !GAME.launchSequence && !player.isLandingSequence && !GAME.isPlayerDying) {
         GAME.controlMode = GAME.controlMode === 'MOUSE_AIM' ? 'SUBSPACE' : 'MOUSE_AIM';
-        Cielo.play(GAME.controlMode === 'MOUSE_AIM' ? "マウスエイムモードですー" : "サブスペースモードですー");
+        Cielo.play(GAME.controlMode === 'MOUSE_AIM' ? "マウスエイムモードです" : "サブスペースモードです");
     } else if (e.code === 'KeyC' && !e.repeat && GAME.state === 'PLAYING' && !GAME.launchSequence && !player.isLandingSequence && !GAME.isPlayerDying) {
         CommStateManager.handleInput(e);
     } else if (GAME.commState && GAME.commState !== 'INACTIVE') {
@@ -342,13 +342,13 @@ window.addEventListener('keydown', e => {
             player.isOverheated = false;
             player.overheatTimer = 0;
             GAME.damageFlashTimer = 0;
-            Cielo.play("HP全快ですー");
+            Cielo.play("完全チート修理します！");
         } else if (e.code === 'Digit2' || e.code === 'Numpad2') {
             GAME.debugEnemyRespawnEnabled = !GAME.debugEnemyRespawnEnabled;
-            Cielo.play(GAME.debugEnemyRespawnEnabled ? "敵リスポーンONですー" : "敵リスポーンOFFですー");
+            Cielo.play(GAME.debugEnemyRespawnEnabled ? "敵リスポーンONです" : "敵リスポーンOFFです");
         } else if (e.code === 'Digit3' || e.code === 'Numpad3') {
             clearAllEnemiesInstantly();
-            Cielo.play("敵を全滅させましたー");
+            Cielo.play("まじかるまじかる敵全滅☆えいっ！");
         } else if (e.code === 'Digit5' || e.code === 'Numpad5') {
             // EXPを足すだけではなく、即座にレベルアップとストック付与を行う
             playerStats.level++;
@@ -358,7 +358,7 @@ window.addEventListener('keydown', e => {
         } else if (e.code === 'Digit6' || e.code === 'Numpad6') {
             if (entities.enemyMothership && !entities.enemyMothership.isDead) {
                 entities.enemyMothership.hp = 0;
-                Cielo.play("敵母艦を強制破壊しましたー");
+                Cielo.play("みらくるみらくる敵母艦☆消滅！");
             }
         } else if (e.code === 'Digit4' || e.code === 'Numpad4') {
             GAME.killCount = CONFIG.MISSION_QUOTA;
@@ -369,7 +369,7 @@ window.addEventListener('keydown', e => {
             player.landingPhase = 'NONE';
             player.landingTimer = 0;
             player.landingForClear = false;
-            Cielo.play("ミッション強制クリアですー");
+            Cielo.play("ミッション・クリアしたことにしました");
         }
     }
 });
@@ -868,7 +868,7 @@ function update() {
                 player.leftTrailHistory = [];
                 player.rightTrailHistory = [];
                 if (player.landingForClear) {
-                    Cielo.play("カタパルトロック。着艦完了です");
+                    Cielo.play("カタパルトロック。格納フェーズ移行。");
                 } else {
                     Cielo.play("着艦シーケンス開始します");
                 }
@@ -901,7 +901,7 @@ function update() {
                 } else {
                     // 補給着艦：HPが最大か否かでメッセージ分岐
                     if (playerStats.hp >= playerStats.maxHp) {
-                        Cielo.play("あれ？何しに戻ってきたんですか？ さあ、お仕事が待ってますよ！");
+                        Cielo.play("あれ？何しに戻ってきたんですか？");
                         player.needsResupplyVisual = false;
                         player.landingTimer = 60; // 1秒で追い出し
                     } else {
@@ -2609,7 +2609,7 @@ const CommStateManager = {
         } else if (GAME.commState === 'MENU') {
             if (e.code === 'KeyF') { Cielo.play("了解、貴機座標へベクトル合わせます。Aガレージ、前進！"); GAME.commState = 'INACTIVE'; }
             if (e.code === 'KeyR') { Cielo.play("目標座標を共有しました。Aガレージ火器管制、最大戦力へ！"); GAME.commState = 'INACTIVE'; }
-            if (e.code === 'KeyE') { Cielo.play("了解、退避ルートへ急行します。……無事に帰ってきてくださいね！"); GAME.commState = 'INACTIVE'; }
+            if (e.code === 'KeyE') { Cielo.play("了解。退避ルートへ急行します。……無事に帰ってきてくださいね！"); GAME.commState = 'INACTIVE'; }
             if (e.code === 'KeyQ') { Cielo.play("了解。未探索エリアへレーダーを展開しながら移動します"); GAME.commState = 'INACTIVE'; }
         }
     },
