@@ -1,5 +1,15 @@
 const changelog = [
   {
+    version: "v0.5.16",
+    date: "2026-05-24",
+    description: "Refactoring Phase 3: Extracted keyboard input handling.",
+    details: [
+      "【リファクタリング】`main.js` に肥大化していた `keydown` の処理をゲーム状態ごとに分離し、専用の入力ハンドラ（`handleTitleInput`, `handleResultInput`, `handleLevelUpInput`, `handlePlayingInput`, `handleCommInput`）へ移動（完全互換維持）",
+      "【最適化】`main.js` の `keydown` リスナーを、状態に応じたハンドラへ委譲する薄いディスパッチャに簡略化",
+      "【修正】通信モード（GAME.commState がアクティブな状態）において、KeyC（通信終了）および KeyX（視点切替）が処理されず入力が受け付けられなくなる不具合を修正"
+    ]
+  },
+  {
     version: "v0.5.15",
     date: "2026-05-24",
     description: "Bug fix for Cielo undefined & Refactoring Phase 3: RESETGAME.",
