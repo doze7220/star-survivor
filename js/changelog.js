@@ -1,5 +1,14 @@
 const changelog = [
   {
+    version: "v0.5.09",
+    date: "2026-05-24",
+    description: "Refactoring Phase 2e: Extracted HUD and UI drawing logic.",
+    details: [
+      "【リファクタリング】`main.js` から HUD (ヘッドアップディスプレイ) の更新と UI の描画ロジックを抽出し、`js/hud.js` に `HUDManager` として分離（カプセル化）",
+      "【リファクタリング】`updateHUD()` と `draw()` 内の UI 描画処理を移行"
+    ]
+  },
+  {
     version: "v0.5.08",
     date: "2026-05-24",
     description: "Refactoring Phase 2d: Extracted input management logic.",
