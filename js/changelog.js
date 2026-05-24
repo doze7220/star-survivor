@@ -1,5 +1,20 @@
 const changelog = [
   {
+    version: "v0.5.28",
+    date: "2026-05-25",
+    description: "Feature: Updated HUD stats panel and implemented Booster System logic.",
+    details: [
+      "【機能追加】HUDの詳細ステータスパネルに VULCAN / MISSILE の DAMAGE と RANGE を追加表示",
+      "【機能追加】HUDに Booster System の強化段階に応じた BOOST CAP. (ブースト容量) を表示するように変更",
+      "【表示修正】HUDの ACC 表記を ACCELERATION に修正",
+      "【表示修正】HUDの MAX SPEED と ACCELERATION の数値に単位（km/s, G）を追加",
+      "【表示修正】HUDにミサイル速度（SPEED）を追加し、ミサイル等の連動ステータスのレベル表記を空白に変更。速度には単位（km/s）を付与",
+      "【表示修正】自機の砲塔の長さを調整し、先端から少し短くなるように変更",
+      "【不具合修正】Booster System のアップグレード効果（ブーストゲージ増加・CD短縮）が実際のゲームプレイに反映されていなかった不具合を修正",
+      "【機能追加】Missile System のアップグレード効果（同時発射数、攻撃力、速度、射程の向上）を正式に実装"
+    ]
+  },
+  {
     version: "v0.5.27",
     date: "2026-05-25",
     description: "Bugfix: Corrected engine and wind trail coordinate logic.",

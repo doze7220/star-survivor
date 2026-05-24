@@ -15,6 +15,16 @@ const HUDManager = {
                 <div class="stat-category">
                     <div class="stat-category-title">// VULCAN</div>
                     <div class="stat-row">
+                        <span class="stat-label">DAMAGE</span>
+                        <span class="stat-level">&nbsp;&nbsp;&nbsp;</span>
+                        <span class="stat-value">10</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">RANGE</span>
+                        <span class="stat-level">&nbsp;&nbsp;&nbsp;</span>
+                        <span class="stat-value">1500m</span>
+                    </div>
+                    <div class="stat-row">
                         <span class="stat-label">PROJECTILES</span>
                         <span class="stat-level">Lv${playerStats.upgrades.bulletCount || 0}</span>
                         <span class="stat-value">${playerStats.bulletCount}</span>
@@ -28,8 +38,23 @@ const HUDManager = {
                 <div class="stat-category">
                     <div class="stat-category-title">// MISSILE</div>
                     <div class="stat-row">
-                        <span class="stat-label">LAUNCHERS</span>
+                        <span class="stat-label">DAMAGE</span>
                         <span class="stat-level">Lv${playerStats.upgrades.missile || 0}</span>
+                        <span class="stat-value">${Math.floor(150 * (playerStats.missileDamageMult || 1.0))}</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">SPEED</span>
+                        <span class="stat-level">&nbsp;&nbsp;&nbsp;</span>
+                        <span class="stat-value">${(5.3 * (playerStats.missileSpeedMult || 1.0)).toFixed(1)}km/s</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">RANGE</span>
+                        <span class="stat-level">&nbsp;&nbsp;&nbsp;</span>
+                        <span class="stat-value">${Math.floor(1590 + (playerStats.missileAddRange || 0))}m</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">LAUNCHERS</span>
+                        <span class="stat-level">&nbsp;&nbsp;&nbsp;</span>
                         <span class="stat-value">${playerStats.missileCount}</span>
                     </div>
                 </div>
@@ -37,13 +62,18 @@ const HUDManager = {
                     <div class="stat-category-title">// THRUSTER</div>
                     <div class="stat-row">
                         <span class="stat-label">MAX SPEED</span>
-                        <span class="stat-level">Lv${playerStats.upgrades.booster || 0}</span>
-                        <span class="stat-value">${(playerStats.maxSpeed).toFixed(1)}</span>
+                        <span class="stat-level">&nbsp;&nbsp;&nbsp;</span>
+                        <span class="stat-value">${(playerStats.maxSpeed).toFixed(1)}km/s</span>
                     </div>
                     <div class="stat-row">
-                        <span class="stat-label">ACC</span>
+                        <span class="stat-label">ACCELERATION</span>
+                        <span class="stat-level">&nbsp;&nbsp;&nbsp;</span>
+                        <span class="stat-value">${(playerStats.moveSpeed).toFixed(2)}G</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">BOOST CAP.</span>
                         <span class="stat-level">Lv${playerStats.upgrades.booster || 0}</span>
-                        <span class="stat-value">${(playerStats.moveSpeed).toFixed(2)}</span>
+                        <span class="stat-value">${80 + (playerStats.upgrades.booster || 0) * 20}</span>
                     </div>
                     <div class="stat-row">
                         <span class="stat-label">HANDLING</span>
@@ -52,7 +82,7 @@ const HUDManager = {
                     </div>
                     <div class="stat-row">
                         <span class="stat-label">CTRL MODE</span>
-                        <span class="stat-level">Lv-</span>
+                        <span class="stat-level">&nbsp;&nbsp;&nbsp;</span>
                         <span class="stat-value">${GAME.controlMode}</span>
                     </div>
                 </div>
@@ -130,7 +160,8 @@ const HUDManager = {
         ctx.strokeStyle = 'rgba(255, 136, 0, 0.2)';
         ctx.stroke();
 
-        const boostRatio = (player.boostGauge !== undefined ? player.boostGauge : 80) / 80;
+        const maxBoostGauge = 80 + (playerStats.upgrades.booster || 0) * 20;
+        const boostRatio = (player.boostGauge !== undefined ? player.boostGauge : maxBoostGauge) / maxBoostGauge;
         if (boostRatio > 0) {
             ctx.beginPath();
             const startAngle = 7 * Math.PI / 6; // 8時から

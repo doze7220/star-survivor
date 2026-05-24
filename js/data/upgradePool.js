@@ -30,7 +30,22 @@ const upgradePool = [
         apply: () => {
             playerStats.upgrades.missile++;
             const lv = playerStats.upgrades.missile;
-            if (lv === 3 || lv === 5) { playerStats.missileCount++; }
+            
+            let dmgMult = 1.0;
+            let spdMult = 1.0;
+            let addRange = 0;
+            let count = 1;
+
+            if (lv >= 1) { dmgMult += 0.5; spdMult += 0.5; }
+            if (lv >= 2) { count += 1; }
+            if (lv >= 3) { dmgMult += 0.5; spdMult += 0.5; addRange += 500; }
+            if (lv >= 4) { count += 1; }
+            if (lv >= 5) { dmgMult += 0.5; spdMult += 0.5; addRange += 500; }
+
+            playerStats.missileDamageMult = dmgMult;
+            playerStats.missileSpeedMult = spdMult;
+            playerStats.missileAddRange = addRange;
+            playerStats.missileCount = count;
         }
     },
     {

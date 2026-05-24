@@ -517,10 +517,18 @@ function update() {
             playerStats.autoRepairCooldown--;
         }
 
+        const boosterLv = playerStats.upgrades.booster || 0;
+        const maxBoostGauge = 80 + (boosterLv * 20); // 増量
+        const baseCooldown = 360 - (boosterLv * 30); // 使い切り時CD
+        const cancelCooldown = 180 - (boosterLv * 15); // 途中解除時CD
+
         if (player.boostGauge === undefined) {
-            player.boostGauge = 80;
+            player.boostGauge = maxBoostGauge;
             player.boostActiveTimer = 0;
             player.boostCooldownTimer = 0;
+        }
+        if (player.boostGauge > maxBoostGauge) {
+            player.boostGauge = maxBoostGauge;
         }
 
         const isHoldingShift = (InputManager.isPressed('ShiftLeft') || InputManager.isPressed('ShiftRight')) && !player.isOverheated;
@@ -539,20 +547,20 @@ function update() {
             player.boostActiveTimer++;
 
             if (player.boostGauge <= 0) {
-                // 使い続けた場合のクールダウンは6秒 (360F)
-                player.boostCooldownTimer = 360;
+                // 使い続けた場合のクールダウン
+                player.boostCooldownTimer = baseCooldown;
                 player.boostActiveTimer = 0;
             }
         } else {
             if (player.boostActiveTimer > 0) {
-                // 途中で離した場合のクールダウンは3秒 (180F)
-                player.boostCooldownTimer = 180;
+                // 途中で離した場合のクールダウン
+                player.boostCooldownTimer = cancelCooldown;
                 player.boostActiveTimer = 0;
             }
 
             if (player.boostCooldownTimer > 0) {
                 player.boostCooldownTimer--;
-            } else if (player.boostGauge < 80) {
+            } else if (player.boostGauge < maxBoostGauge) {
                 // クールダウン終了後に回復 (1/F)
                 player.boostGauge++;
             }
@@ -863,17 +871,31 @@ function update() {
             }
         });
 
-        entities.missiles.push({
-            x: player.x,
-            y: player.y,
-            vx: player.vx + Math.cos(fireAngle) * 5,
-            vy: player.vy + Math.sin(fireAngle) * 5,
-            angle: fireAngle,
-            target: target,
-            life: 300,
-            speed: CONFIG.MISSILE_SPEED,
-            turnRate: CONFIG.MISSILE_TURN_RATE
-        });
+        const missileCount = playerStats.missileCount || 1;
+        const spreadAngle = 0.2; // ミサイル同士の広がり角（ラジアン）
+        const startOffset = -((missileCount - 1) * spreadAngle) / 2;
+
+        const dmgMult = playerStats.missileDamageMult || 1.0;
+        const speedMult = playerStats.missileSpeedMult || 1.0;
+        const addRange = playerStats.missileAddRange || 0;
+        const finalSpeed = CONFIG.MISSILE_SPEED * speedMult;
+        const finalLife = Math.floor((1590 + addRange) / finalSpeed);
+
+        for (let i = 0; i < missileCount; i++) {
+            const currentAngle = fireAngle + startOffset + (i * spreadAngle);
+            entities.missiles.push({
+                x: player.x,
+                y: player.y,
+                vx: player.vx + Math.cos(currentAngle) * 5,
+                vy: player.vy + Math.sin(currentAngle) * 5,
+                angle: currentAngle,
+                target: target,
+                life: finalLife,
+                speed: finalSpeed,
+                turnRate: CONFIG.MISSILE_TURN_RATE,
+                damageMult: dmgMult
+            });
+        }
         comm.play("ミサイル、いってらっしゃーい！");
     }
     if (player.missileCooldown > 0) player.missileCooldown--;
@@ -1129,7 +1151,7 @@ function update() {
         for (let j = entities.missiles.length - 1; j >= 0; j--) {
             let m = entities.missiles[j];
             if (Math.hypot(b.x - m.x, b.y - m.y) < 10) { // ミサイルの当たり判定
-                spawnExplosion(m.x, m.y, false, false, 0.5, 1.0, true);
+                spawnExplosion(m.x, m.y, false, false, 0.5, 1.0, true, m.damageMult || 1.0);
                 entities.missiles.splice(j, 1);
                 hitMissile = true;
                 break;
@@ -1198,7 +1220,7 @@ function update() {
         }
         m.life--;
         if (hit || m.life <= 0) {
-            spawnExplosion(m.x, m.y, false, false, 0.5, 1.0, true);
+            spawnExplosion(m.x, m.y, false, false, 0.5, 1.0, true, m.damageMult || 1.0);
 
             // Limit Burst: Multi-Missile (missileCount >= 6)
             if ((playerStats.upgrades.missile || 0) >= 6 && !m.isSubMunition) {
@@ -1722,7 +1744,7 @@ function update() {
                 em.hp -= 30; // 命中時の直接ダメージ
                 em.flashTimer = CONFIG.FLASH_DURATION;
                 spawnDebris(m.x, m.y, '#fff', 3);
-                spawnExplosion(m.x, m.y, false, false, 0.5, 1.0, true);
+                spawnExplosion(m.x, m.y, false, false, 0.5, 1.0, true, m.damageMult || 1.0);
 
                 // Limit Burst: Multi-Missile (missileCount >= 6)
                 if ((playerStats.upgrades.missile || 0) >= 6 && !m.isSubMunition) {
@@ -2397,7 +2419,7 @@ function drawGameEntities(ctx) {
         ctx.translate(player.x, player.y);
         ctx.rotate(player.turretAngle);
         ctx.fillStyle = '#fff';
-        ctx.fillRect(0, -3, CONFIG.PLAYER_SIZE_W / 2 + 10, 6);
+        ctx.fillRect(0, -3, CONFIG.PLAYER_SIZE_W / 2 - 2, 6);
         ctx.restore();
 
         // 自機描画 (土台)
