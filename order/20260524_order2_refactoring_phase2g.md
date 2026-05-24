@@ -18,7 +18,7 @@ main.js に直書きされている Cielo 通信 UI の処理を、
 # 1. 新規ファイルの作成
 以下のファイルを作成する：
 
-- `js/classes/ui/communication.js`
+- `js/classes/communication.js`
 
 このファイルには、**通信 UI を管理するクラス**を定義する。  
 クラス名は以下のいずれかとする：
@@ -72,7 +72,7 @@ main.js に存在する Cielo オブジェクト定義を **完全に削除**す
 ## 3-2. 新クラスのインポートとインスタンス化
 main.js の先頭付近に以下を追加する：
 
-- `import Communication from "./js/classes/ui/communication.js";`
+- `import Communication from "./js/classes/communication.js";`
 - `const comm = new Communication();`
 
 ## 3-3. 既存の Cielo.play 呼び出しの置換

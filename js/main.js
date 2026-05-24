@@ -5,41 +5,8 @@
 // ==========================================
 // 3 Cielo 通信システム
 // ==========================================
-const Cielo = {
-    element: null,
-    timerId: null,
-    currentMsg: null,
-    init: function () {
-        this.element = document.getElementById('cielo-comm');
-        this.play("ミッションは敵撃破10機！いってらっしゃい傭兵さん！");
-    },
-    play: function (msg, type = "normal") { // ← 第2引数 type を追加（デフォルトは "normal"）
-        if (this.currentMsg === msg) return;
-
-        if (this.timerId) {
-            clearTimeout(this.timerId);
-            this.timerId = null;
-        }
-
-        // ▼ ここに type による色分け処理を追加 ▼
-        if (type === "system") {
-            this.element.style.color = "#ff3333"; // システムメッセージ時は赤文字にする
-        } else {
-            this.element.style.color = "#0f0";    // 通常時は元の緑色
-        }
-
-        this.currentMsg = msg;
-        this.element.innerHTML = `[ NAVI : シエロ ]<br>＝ ${msg} ＝`;
-        this.element.style.opacity = 1;
-
-        const duration = msg.length * 1000;
-        this.timerId = setTimeout(() => {
-            this.element.style.opacity = 0;
-            this.currentMsg = null;
-            this.timerId = null;
-        }, duration);
-    }
-};
+// import Communication from "./js/classes/communication.js";
+const comm = new Communication();
 
 // ==========================================
 // 4. ゲーム状態・エンティティ定義
@@ -107,64 +74,13 @@ const GAME = {
 
 // ゲーム初期化関数
 function resetGame() {
-    GAME.isPlayerDying = false;
-    GAME.isMissionClear = false;
-    GAME.isResultTriggered = false;
-    GAME.killCount = 0;
-    GAME.damageTaken = 0;
-    GAME.operationTime = 0;
-    GAME.operationFrameCount = 0;
-    GAME.quotaReminderTimer = 0;
-    GAME.launchSequence = true;
-    GAME.launchTimer = 0;
-    GAME.landingBlockedTimer = 0;
+    initGameState(GAME);
+    initPlayer(player, playerStats);
+    initEntities(entities);
+    initMothership(entities, CONFIG);
+    initUI();
 
-    player.x = 0;
-    player.y = -90;
-    player.vx = 0;
-    player.vy = 0;
-    player.bodyAngle = -Math.PI / 2;
-    player.turretAngle = -Math.PI / 2;
-    player.isLandingSequence = false;
-    player.landingPhase = 'NONE';
-    player.landingTimer = 0;
-    player.leftTrailHistory = [];
-    player.rightTrailHistory = [];
-    player._hpWarningPlayed = false;
-
-    playerStats.hp = playerStats.maxHp;
-    playerStats.heat = 0;
-    player.isOverheated = false;
-    player.overheatTimer = 0;
-
-    entities.enemies = [];
-    entities.bullets = [];
-    entities.enemyBullets = [];
-    entities.particles = [];
-    entities.gems = [];
-    entities.missiles = [];
-    entities.debris = [];
-    entities.explosions = [];
-
-    // 敵母艦の初期化
-    entities.enemyMothership = {
-        x: CONFIG.SPAWN_X,
-        y: CONFIG.SPAWN_Y,
-        hp: 1000,
-        maxHp: 1000,
-        radius: 120, // 当たり判定用（大まか）
-        isDead: false,
-        launchTimer: 180, // 最初から3秒後に発進開始
-        flashTimer: 0
-    };
-
-
-    const credits = document.getElementById('credits-panel');
-    if (credits) credits.style.display = 'none';
-    const cielo = document.getElementById('cielo-comm');
-    if (cielo) cielo.style.display = 'none';
-
-    Cielo.play("ミッションは敵撃破10機！いってらっしゃい傭兵さん！");
+    comm.play("ミッションは敵撃破10機！あるいは敵母艦の撃破！いってらっしゃい傭兵さん！");
 }
 
 // シーン管理オブジェクト
@@ -331,7 +247,7 @@ window.addEventListener('keydown', e => {
 
     if (e.code === 'KeyX' && !e.repeat && GAME.state === 'PLAYING' && !GAME.launchSequence && !player.isLandingSequence && !GAME.isPlayerDying) {
         GAME.controlMode = GAME.controlMode === 'MOUSE_AIM' ? 'SUBSPACE' : 'MOUSE_AIM';
-        Cielo.play(GAME.controlMode === 'MOUSE_AIM' ? "マウスエイムモードです" : "サブスペースモードです");
+        comm.play(GAME.controlMode === 'MOUSE_AIM' ? "マウスエイムモードです" : "サブスペースモードです");
     } else if (e.code === 'KeyC' && !e.repeat && GAME.state === 'PLAYING' && !GAME.launchSequence && !player.isLandingSequence && !GAME.isPlayerDying) {
         CommStateManager.handleInput(e);
     } else if (GAME.commState && GAME.commState !== 'INACTIVE') {
@@ -342,23 +258,23 @@ window.addEventListener('keydown', e => {
             player.isOverheated = false;
             player.overheatTimer = 0;
             GAME.damageFlashTimer = 0;
-            Cielo.play("完全チート修理します！");
+            comm.play("完全チート修理します！");
         } else if (e.code === 'Digit2' || e.code === 'Numpad2') {
             GAME.debugEnemyRespawnEnabled = !GAME.debugEnemyRespawnEnabled;
-            Cielo.play(GAME.debugEnemyRespawnEnabled ? "敵リスポーンONです" : "敵リスポーンOFFです");
+            comm.play(GAME.debugEnemyRespawnEnabled ? "敵リスポーンONです" : "敵リスポーンOFFです");
         } else if (e.code === 'Digit3' || e.code === 'Numpad3') {
             clearAllEnemiesInstantly();
-            Cielo.play("まじかるまじかる敵全滅☆えいっ！");
+            comm.play("まじかるまじかる敵全滅☆えいっ！");
         } else if (e.code === 'Digit5' || e.code === 'Numpad5') {
             // EXPを足すだけではなく、即座にレベルアップとストック付与を行う
             playerStats.level++;
             playerStats.levelUpStock = (playerStats.levelUpStock || 0) + 1;
             playerStats.nextLevelExp = Math.floor(playerStats.nextLevelExp * CONFIG.LEVEL_UP_EXP_MULT);
-            Cielo.play("リミット解除が可能です！");
+            comm.play("リミット解除が可能です！");
         } else if (e.code === 'Digit6' || e.code === 'Numpad6') {
             if (entities.enemyMothership && !entities.enemyMothership.isDead) {
                 entities.enemyMothership.hp = 0;
-                Cielo.play("みらくるみらくる敵母艦☆消滅！");
+                comm.play("みらくるみらくる敵母艦☆消滅！");
             }
         } else if (e.code === 'Digit4' || e.code === 'Numpad4') {
             GAME.killCount = CONFIG.MISSION_QUOTA;
@@ -369,7 +285,7 @@ window.addEventListener('keydown', e => {
             player.landingPhase = 'NONE';
             player.landingTimer = 0;
             player.landingForClear = false;
-            Cielo.play("ミッション・クリアしたことにしました！");
+            comm.play("ミッション・クリアしたことにしました！");
         }
     }
 });
@@ -611,7 +527,7 @@ function damagePlayer(amount) {
         if ((playerStats.autoRepairCooldown || 0) <= 0) {
             playerStats.hp = playerStats.maxHp * 0.5;
             playerStats.autoRepairCooldown = 10800; // 3 minutes at 60 FPS
-            Cielo.play("オートリペア発動！致命傷を回避しました！", "system");
+            comm.play("オートリペア発動！致命傷を回避しました！", "system");
             // エフェクト生成
             for (let i = 0; i < 30; i++) {
                 entities.particles.push({
@@ -673,7 +589,7 @@ function update() {
         GAME.launchTimer = (GAME.launchTimer || 0) + 1;
 
         if (GAME.launchTimer === 1) {
-            Cielo.play("カタパルト接続完了！出撃システム起動！");
+            comm.play("カタパルト接続完了！出撃システム起動！");
         }
 
         if (GAME.launchTimer > 240) {
@@ -720,7 +636,7 @@ function update() {
         if (isBoosting) {
             if (player.boostActiveTimer === 0) {
                 playerStats.heat = Math.min(CONFIG.HEAT_MAX, playerStats.heat + 20); // 使用直後に+20
-                Cielo.play("ブースト全開ですね！");
+                comm.play("ブースト全開ですね！");
             } else if (player.boostActiveTimer % 5 === 0) {
                 playerStats.heat = Math.min(CONFIG.HEAT_MAX, playerStats.heat + 1); // 以後+1/5F
             }
@@ -868,9 +784,9 @@ function update() {
                 player.leftTrailHistory = [];
                 player.rightTrailHistory = [];
                 if (player.landingForClear) {
-                    Cielo.play("カタパルトロック。格納フェーズ移行。");
+                    comm.play("カタパルトロック。格納フェーズ移行。");
                 } else {
-                    Cielo.play("着艦シーケンス開始します");
+                    comm.play("着艦シーケンス開始します");
                 }
                 player.landingPhase = 'TOW_TO_ROOT';
             }
@@ -895,17 +811,17 @@ function update() {
                 player.bodyAngle = targetUp;
                 player.turretAngle = targetUp;
                 if (player.landingForClear) {
-                    Cielo.play("おかえりなさい。お疲れ様でした！");
+                    comm.play("おかえりなさい。お疲れ様でした！");
                     player.landingPhase = 'WAIT_CLEAR';
                     player.landingTimer = 180;
                 } else {
                     // 補給着艦：HPが最大か否かでメッセージ分岐
                     if (playerStats.hp >= playerStats.maxHp) {
-                        Cielo.play("あれ？何しに戻ってきたんですか？");
+                        comm.play("あれ？何しに戻ってきたんですか？");
                         player.needsResupplyVisual = false;
                         player.landingTimer = 60; // 1秒で追い出し
                     } else {
-                        Cielo.play("お疲れ様でした。補給は任せてください");
+                        comm.play("お疲れ様です。補給は任せてください");
                         playerStats.hp = playerStats.maxHp;
                         player.needsResupplyVisual = true;
                         player.landingTimer = 120; // 修理があるときは2秒
@@ -923,7 +839,7 @@ function update() {
                 if ((playerStats.levelUpStock || 0) > 0) {
                     // 補給完了後、ストックがあれば全画面レベルアップへ移行
                     playerStats.levelUpStock--;
-                    Cielo.play("溜まったエネルギーを機体に適応させます！");
+                    comm.play("溜まったエネルギーを機体に適応させます！");
 
                     GAME.levelUpCards = [];
                     let available = [...upgradePool].filter(u => {
@@ -1064,7 +980,7 @@ function update() {
             speed: CONFIG.MISSILE_SPEED,
             turnRate: CONFIG.MISSILE_TURN_RATE
         });
-        Cielo.play("ミサイル、いってらっしゃーい！");
+        comm.play("ミサイル、いってらっしゃーい！");
     }
     if (player.missileCooldown > 0) player.missileCooldown--;
 
@@ -1435,7 +1351,7 @@ function update() {
                     while (clockAngle > Math.PI) clockAngle -= Math.PI * 2;
                     let oclock = Math.round((clockAngle + Math.PI / 2) / (Math.PI / 6));
                     if (oclock <= 0) oclock += 12;
-                    Cielo.play(`${oclock}時にターゲット発見ですー！`);
+                    comm.play(`${oclock}時にターゲット発見ですー！`);
                 }
 
                 // 性格の決定（CONFIGの設定確率に基づく）
@@ -2019,7 +1935,7 @@ function update() {
     if (GAME.killCount >= CONFIG.MISSION_QUOTA && !GAME.isMissionClear && !GAME.isPlayerDying) {
         GAME.quotaReminderTimer = (GAME.quotaReminderTimer || 0) + 1;
         if (GAME.quotaReminderTimer >= 900) {
-            Cielo.play("ノルマ達成ですー、無理せず帰ってきてくださいね");
+            comm.play("ミッション達成です、無理せず帰ってきてくださいね");
             GAME.quotaReminderTimer = 0;
         }
     }
@@ -2034,7 +1950,7 @@ function update() {
             const distToMs = Math.hypot(player.x - CONFIG.MOTHERSHIP_X, player.y - CONFIG.MOTHERSHIP_Y);
             GAME.landingBlockedTimer = (GAME.landingBlockedTimer || 0) - 1;
             if (distToMs <= 200 && GAME.landingBlockedTimer <= 0) {
-                Cielo.play("敵機からターゲット中です！排除しないと着艦できません！");
+                comm.play("敵機からターゲット中です！排除しないと着艦できません！");
                 GAME.landingBlockedTimer = 300; // 約5秒間は再生しない
             }
         } else {
@@ -2062,7 +1978,7 @@ function update() {
     // HP20%以下の通信
     if (playerStats.hp > 0 && playerStats.hp <= playerStats.maxHp * 0.2 && !player._hpWarningPlayed) {
         player._hpWarningPlayed = true;
-        Cielo.play("無理しないで、帰還してください！");
+        comm.play("フレーム強度低下！無理しないで、帰還してください！");
     } else if (playerStats.hp > playerStats.maxHp * 0.2) {
         player._hpWarningPlayed = false;
     }
@@ -2296,7 +2212,7 @@ function updateLevelUpScreen() {
                     GAME.levelUpNonSelectedY = 0;
                 } else {
                     // 全て使い切ったら発進
-                    Cielo.play("全調整完了！お気をつけて！");
+                    comm.play("全調整完了！お気をつけて！");
                     GAME.state = 'PLAYING';
                     player.isLandingSequence = false;
                     player.landingPhase = 'NONE';
@@ -2536,10 +2452,10 @@ const CommStateManager = {
                     const idx = Math.floor(Math.random() * available.length);
                     GAME.levelUpCards.push(available.splice(idx, 1)[0]);
                 }
-                Cielo.play("エネルギー蓄積完了。リミット解放の指示を！");
+                comm.play("エネルギー蓄積完了。リミット解放の指示を！");
             } else {
                 GAME.commState = 'MENU';
-                Cielo.play("こちらAガレージ。通信確立しました、指示を！");
+                comm.play("こちらAガレージ。通信確立しました、指示を！");
             }
         } else {
             if (GAME.commState === 'MENU' && (playerStats.levelUpStock || 0) > 0) {
@@ -2553,10 +2469,10 @@ const CommStateManager = {
                     const idx = Math.floor(Math.random() * available.length);
                     GAME.levelUpCards.push(available.splice(idx, 1)[0]);
                 }
-                Cielo.play("エネルギー蓄積完了。リミット解放の指示を！");
+                comm.play("エネルギー蓄積完了。リミット解放の指示を！");
             } else {
                 GAME.commState = 'INACTIVE';
-                Cielo.play("了解、指示を待ちます！");
+                comm.play("了解、指示を待ちます！");
             }
         }
     },
@@ -2582,18 +2498,18 @@ const CommStateManager = {
                         const idx = Math.floor(Math.random() * available.length);
                         GAME.levelUpCards.push(available.splice(idx, 1)[0]);
                     }
-                    Cielo.play("続けてリミット解放が可能です！指示を！");
+                    comm.play("続けてリミット解放が可能です！指示を！");
                 } else {
                     // ストックを使い切った場合は通信を閉じる
                     GAME.commState = 'INACTIVE';
-                    Cielo.play("リミット解除完了！お気をつけて！");
+                    comm.play("リミット解除完了！お気をつけて！");
                 }
             }
         } else if (GAME.commState === 'MENU') {
-            if (e.code === 'KeyF') { Cielo.play("了解、貴機座標へベクトル合わせます。Aガレージ、前進！"); GAME.commState = 'INACTIVE'; }
-            if (e.code === 'KeyR') { Cielo.play("目標座標を共有しました。Aガレージ火器管制、最大戦力へ！"); GAME.commState = 'INACTIVE'; }
-            if (e.code === 'KeyE') { Cielo.play("了解。退避ルートへ急行します。……無事に帰ってきてくださいね！"); GAME.commState = 'INACTIVE'; }
-            if (e.code === 'KeyQ') { Cielo.play("了解。未探索エリアへレーダーを展開しながら移動します"); GAME.commState = 'INACTIVE'; }
+            if (e.code === 'KeyF') { comm.play("了解、貴機座標へベクトル合わせます。Aガレージ、前進！"); GAME.commState = 'INACTIVE'; }
+            if (e.code === 'KeyR') { comm.play("目標座標を共有しました。Aガレージ火器管制、最大戦力へ！"); GAME.commState = 'INACTIVE'; }
+            if (e.code === 'KeyE') { comm.play("了解。退避ルートへ急行します。……無事に帰ってきてくださいね！"); GAME.commState = 'INACTIVE'; }
+            if (e.code === 'KeyQ') { comm.play("了解。未探索エリアへレーダーを展開しながら移動します"); GAME.commState = 'INACTIVE'; }
         }
     },
     draw: function (ctx, radarRadius) {
@@ -3014,6 +2930,5 @@ function loop() {
 
 // 初期化して開始
 SpriteCache.init();
-Cielo.init();
 loop();
 

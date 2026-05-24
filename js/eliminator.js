@@ -24,7 +24,7 @@ const eliminator = {
             e.vx = 0;
             e.vy = 0;
 
-            Cielo.play("傭兵さん！傭兵さーーん！");
+            comm.play("傭兵さん！傭兵さーーん！");
 
             // 連鎖爆発の起点として自機位置に大爆発を発生（ゲームオーバー用）
             spawnExplosion(e.x, e.y, true);
@@ -64,7 +64,7 @@ const eliminator = {
                 this.spawnItem(e.x, e.y, e.vx, e.vy, 'HEAL', SpriteCache.gemHeal, 0, CONFIG.HEAL_ITEM_AMOUNT, 1.0);
             }
 
-            Cielo.play("敵母艦の破壊を確認。作戦完了です！");
+            comm.play("敵母艦の破壊を確認。作戦完了です！");
             return;
         }
 
@@ -86,9 +86,9 @@ const eliminator = {
 
             // 撃破時通信
             if (GAME.killCount === 5) {
-                Cielo.play("敵5機撃破！あと半分ですよ！");
+                comm.play("敵5機撃破！あと半分ですよ！");
             } else if (GAME.killCount === CONFIG.MISSION_QUOTA) {
-                Cielo.play("ノルマ達成です、無理せず帰ってきてくださいね");
+                comm.play("ノルマ達成です、無理せず帰ってきてくださいね");
             }
 
             if (index !== undefined) {

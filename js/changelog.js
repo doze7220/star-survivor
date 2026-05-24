@@ -1,5 +1,23 @@
 const changelog = [
   {
+    version: "v0.5.15",
+    date: "2026-05-24",
+    description: "Bug fix for Cielo undefined & Refactoring Phase 3: RESETGAME.",
+    details: [
+      "【バグ修正】リファクタリング後に `Cielo.init()` が `main.js` の末尾に残存しており、ゲーム起動時に ReferenceError となる不具合を修正",
+      "【リファクタリング】`main.js` に肥大化していた `resetGame()` の内部処理を責務ごとに分割し、`js/utils/` 配下の複数の初期化関数（`initPlayer`, `initEntities`, `initGameState`, `initUI`, `initMothership`）へカプセル化（完全互換維持）"
+    ]
+  },
+  {
+    version: "v0.5.14",
+    date: "2026-05-24",
+    description: "Refactoring Phase 2g: Extracted Cielo communication UI.",
+    details: [
+      "【リファクタリング】`main.js` に直書きされていた通信UI（Cielo）の処理を抽出し、`js/classes/communication.js` の `Communication` クラスとして分離（カプセル化）",
+      "【変更】既存のCielo.play呼び出しを完全に新クラスへ移行（機能の完全互換を維持）"
+    ]
+  },
+  {
     version: "v0.5.13",
     date: "2026-05-24",
     description: "Refactoring Phase 2h: Cached Enemy Mothership rendering.",
