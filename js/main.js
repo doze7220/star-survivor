@@ -168,7 +168,12 @@ function resetGame() {
     Cielo.play("ミッションは敵撃破10機！いってらっしゃい傭兵さん！");
 }
 
-// リザルト画面初期化関数
+// シーン管理オブジェクト
+const SceneManager = {
+    title: new TitleScene(),
+    result: new ResultScene()
+};
+
 function initResultScreen(isClear) {
     GAME.state = 'RESULT';
     GAME.isResultTriggered = true;
@@ -495,32 +500,7 @@ class EnemyShip extends Ship {
 
 const player = new PlayerShip();
 
-function normalizeAngle(angle) {
-    return Math.atan2(Math.sin(angle), Math.cos(angle));
-}
 
-function rotateTowards(current, target, maxStep) {
-    const diff = normalizeAngle(target - current);
-    if (Math.abs(diff) <= maxStep) return target;
-    return current + Math.sign(diff) * maxStep;
-}
-
-function getCatapultSpec() {
-    const catW = 150;
-    const catH = CONFIG.PLAYER_SIZE_W * 2.5;
-    // 母艦描画は ctx.rotate(-Math.PI/2) が掛かっているため
-    // ローカル座標 (lx, ly) → ワールド座標 (ly, -lx)
-    // ローカル root(80,0) → world(0,-80)、tip(230,0) → world(0,-230)
-    return {
-        rootX: 0,      // ワールドX：カタパルト根本
-        rootY: -80,    // ワールドY：カタパルト根本
-        tipX: 0,       // ワールドX：カタパルト先端
-        tipY: -(80 + catW), // ワールドY：カタパルト先端 = -230
-        width: catW,
-        height: catH,
-        halfH: catH / 2
-    };
-}
 
 const entities = {
     enemies: [],
@@ -613,51 +593,6 @@ function spawnExplosion(x, y, isPlayer = false, isFlavor = false, sizeMultiplier
         offsetMid: offsetMid,
         offsetSmall: offsetSmall
     });
-}
-
-// 爆発の共通描画関数
-function drawExplosion(ctx, exp) {
-    const scale = exp.currentScale || 0; // updateで計算されるスケール
-    if (scale <= 0) return;
-    const currentRadius = exp.maxRadius * scale;
-
-    ctx.save();
-
-    // 最後の10%でフェードアウト
-    const progress = 1 - (exp.timer / exp.maxTimer);
-    if (progress > 0.9) {
-        ctx.globalAlpha = Math.max(0, (1.0 - progress) / 0.1);
-    } else {
-        ctx.globalAlpha = 1.0;
-    }
-
-    // 振動オフセットを適用
-    const drawX = exp.x + (exp.shakeX || 0);
-    const drawY = exp.y + (exp.shakeY || 0);
-
-    // 円1 (赤/深紅 - 最も大きいベース円)
-    ctx.beginPath();
-    ctx.arc(drawX, drawY, currentRadius, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 30, 0, 0.7)';
-    ctx.fill();
-
-    // 円2 (白 - 中円)
-    const midX = drawX + Math.cos(exp.angle) * currentRadius * exp.offsetMid;
-    const midY = drawY + Math.sin(exp.angle) * currentRadius * exp.offsetMid;
-    ctx.beginPath();
-    ctx.arc(midX, midY, currentRadius * 0.75, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.fill();
-
-    // 円3 (黄色/オレンジ - 小円)
-    const smallX = drawX + Math.cos(exp.angle) * currentRadius * exp.offsetSmall;
-    const smallY = drawY + Math.sin(exp.angle) * currentRadius * exp.offsetSmall;
-    ctx.beginPath();
-    ctx.arc(smallX, smallY, currentRadius * 0.5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 160, 0, 0.8)';
-    ctx.fill();
-
-    ctx.restore();
 }
 
 function spawnEnemyDropItems(x, y, baseVx = 0, baseVy = 0) {
@@ -788,7 +723,7 @@ function update() {
     }
 
     if (GAME.state === 'TITLE') {
-        updateTitleScreen();
+        SceneManager.title.update();
         return;
     }
     if (GAME.state === 'LEVEL_UP') {
@@ -796,7 +731,7 @@ function update() {
         return;
     }
     if (GAME.state === 'RESULT') {
-        updateResultScreen();
+        SceneManager.result.update();
         return;
     }
     if (GAME.state !== 'PLAYING') return;
@@ -808,6 +743,10 @@ function update() {
             GAME.operationTime++;
         }
     }
+
+    // 加速度（ACC）計算のため、現在の速度を前のフレームの速度として保存
+    player.prevVx = player.vx;
+    player.prevVy = player.vy;
 
     // --- Launch Sequence Countdown Update ---
     if (GAME.launchSequence) {
@@ -1100,7 +1039,7 @@ function update() {
             player.turretAngle = targetUp;
             player.landingTimer--;
             if (player.landingTimer <= 0 && !GAME.isResultTriggered) {
-                initResultScreen(true);
+                SceneManager.result.init(true);
             }
         }
     }
@@ -1432,7 +1371,7 @@ function update() {
         if (exp.timer <= 0) {
             // 自機の爆発が完全に消えたらゲームオーバーへ移行
             if (exp.isPlayerExplosion) {
-                initResultScreen(false);
+                SceneManager.result.init(false);
             }
             entities.explosions.splice(i, 1);
         }
@@ -2364,8 +2303,6 @@ function update() {
     });
 
     updateHUD();
-    player.prevVx = player.vx;
-    player.prevVy = player.vy;
 }
 
 function checkLevelUp() {
@@ -2442,438 +2379,7 @@ function updateHUD() {
 // TITLE / LEVEL_UP / RESULT 画面の制御ロジック
 // ==========================================
 
-// --- 円形テキスト描画関数 ---
-function drawCircularText(ctx, text, radius, startAngle, isBottom = false) {
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
 
-    let totalAngle = 0;
-    for (let i = 0; i < text.length; i++) {
-        totalAngle += ctx.measureText(text[i]).width / radius;
-    }
-
-    // isBottomの時は開始角度をずらし、進行方向を逆（左から右）にする
-    let currentAngle = isBottom ? startAngle + (totalAngle / 2) : startAngle - (totalAngle / 2);
-
-    for (let i = 0; i < text.length; i++) {
-        const char = text[i];
-        const charWidth = ctx.measureText(char).width;
-        const charAngle = charWidth / radius;
-
-        // 文字の配置角度
-        const angle = isBottom ? currentAngle - charAngle / 2 : currentAngle + charAngle / 2;
-
-        ctx.save();
-        const x = Math.cos(angle) * radius;
-        const y = Math.sin(angle) * radius;
-        ctx.translate(x, y);
-
-        if (isBottom) {
-            ctx.rotate(angle - Math.PI / 2);
-        } else {
-            ctx.rotate(angle + Math.PI / 2);
-        }
-
-        ctx.fillText(char, 0, 0);
-        ctx.restore();
-
-        // 次の文字へ進む
-        currentAngle = isBottom ? currentAngle - charAngle : currentAngle + charAngle;
-    }
-    ctx.restore();
-}
-
-// --- ベクターパスストリーム方式による滑らかなトレイル描画（先細り仕様） ---
-function drawRibbonTrail(history, colorBase, maxLen) {
-    if (!history || history.length < 2) return;
-
-    ctx.save();
-
-    // トレイルの先端（直近の座標）の状態を基準にする
-    const latestPt = history[history.length - 1];
-    // ブースト時は太さを2.5倍にし、SF的なエネルギー出力を表現
-    const finalLineWidth = latestPt.boost ? maxLen * 2.5 : maxLen;
-
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round'; // 結合部を滑らかに
-
-    if (history.length === 2) {
-        const ratio = 1.0;
-        const segmentWidth = finalLineWidth * ratio;
-
-        ctx.beginPath();
-        ctx.strokeStyle = colorBase;
-        ctx.lineWidth = segmentWidth;
-        ctx.moveTo(history[0].x, history[0].y);
-        ctx.lineTo(history[1].x, history[1].y);
-        ctx.globalAlpha = (latestPt.active ? 0.7 : 0.25) * ratio;
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = segmentWidth * 0.35;
-        ctx.moveTo(history[0].x, history[0].y);
-        ctx.lineTo(history[1].x, history[1].y);
-        ctx.globalAlpha = (latestPt.active ? 0.9 : 0.3) * ratio;
-        ctx.stroke();
-    } else {
-        // 過去から現在に向かってセグメントごとに太さと透明度を変化させて描画 (quadraticCurveToによる平滑化)
-        for (let i = 1; i < history.length - 1; i++) {
-            const p0 = history[i - 1];
-            const p1 = history[i];
-            const p2 = history[i + 1];
-
-            const midX = (p1.x + p2.x) / 2;
-            const midY = (p1.y + p2.y) / 2;
-
-            const ratio = i / (history.length - 2); // 0 (古い) 〜 1 (新しい)
-            const segmentWidth = finalLineWidth * ratio; // 先端（古い点）ほど細くする
-
-            const startMidX = (p0.x + p1.x) / 2;
-            const startMidY = (p0.y + p1.y) / 2;
-
-            // ─── 1. 外周の発光メインライン ───
-            ctx.beginPath();
-            ctx.strokeStyle = colorBase;
-            ctx.lineWidth = segmentWidth;
-
-            if (i === 1) {
-                ctx.moveTo(p0.x, p0.y);
-                ctx.lineTo(startMidX, startMidY);
-            } else {
-                ctx.moveTo(startMidX, startMidY);
-            }
-            ctx.quadraticCurveTo(p1.x, p1.y, midX, midY);
-            if (i === history.length - 2) ctx.lineTo(p2.x, p2.y);
-
-            ctx.globalAlpha = (latestPt.active ? 0.7 : 0.25) * ratio;
-            ctx.stroke();
-
-            // ─── 2. 内側の高輝度ホワイトコアライン（レーザーのようなSF感の演出） ───
-            ctx.beginPath();
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = segmentWidth * 0.35;
-
-            if (i === 1) {
-                ctx.moveTo(p0.x, p0.y);
-                ctx.lineTo(startMidX, startMidY);
-            } else {
-                ctx.moveTo(startMidX, startMidY);
-            }
-            ctx.quadraticCurveTo(p1.x, p1.y, midX, midY);
-            if (i === history.length - 2) ctx.lineTo(p2.x, p2.y);
-
-            ctx.globalAlpha = (latestPt.active ? 0.9 : 0.3) * ratio;
-            ctx.stroke();
-        }
-    }
-
-    ctx.restore();
-}
-
-function updateTitleScreen() {
-    // 背景の星をゆっくり上から下へスクロール
-    stars.forEach(s => {
-        s.y += s.layer.rate * 0.5;
-        if (s.y > GAME.height) {
-            s.y = 0;
-            s.x = Math.random() * GAME.width;
-        }
-    });
-
-    // 遠景爆発の更新（古いパーティクルの削除、flavor爆発の更新）
-    for (let i = entities.particles.length - 1; i >= 0; i--) {
-        let p = entities.particles[i];
-        if (p.type === 'TITLE_FLAVOR_EXP') {
-            p.life -= 0.02;
-            if (p.life <= 0) entities.particles.splice(i, 1);
-        }
-    }
-
-    // タイトル中のFlavor爆発の更新処理
-    for (let i = entities.explosions.length - 1; i >= 0; i--) {
-        let exp = entities.explosions[i];
-        if (exp.isFlavor) {
-            exp.timer--;
-            if (exp.timer <= 0) {
-                entities.explosions.splice(i, 1);
-                continue;
-            }
-            const progress = 1 - (exp.timer / exp.maxTimer);
-            if (progress < 0.2) exp.currentScale = progress / 0.2;
-            else exp.currentScale = 1.0;
-            if (progress >= 0.2 && progress < 0.9) {
-                exp.shakeX = (Math.random() - 0.5) * 4;
-                exp.shakeY = (Math.random() - 0.5) * 4;
-            } else {
-                exp.shakeX = 0; exp.shakeY = 0;
-            }
-        }
-    }
-
-    // ランダムに遠景爆発フレーバーを発生
-    if (Math.random() < 0.015) {
-        const ex = Math.random() * GAME.width;
-        const ey = Math.random() * GAME.height;
-        const sizeMult = 0.5 + Math.random() * 1.5;
-        const durMult = 0.5 + Math.random() * 1.5;
-        spawnExplosion(ex, ey, false, true, sizeMult, durMult);
-    }
-
-    // タイトルプレイヤー機のトレイル履歴の更新
-    if (!GAME.titleLeftTrailHistory) GAME.titleLeftTrailHistory = [];
-    if (!GAME.titleRightTrailHistory) GAME.titleRightTrailHistory = [];
-
-    // タイトル開始時の初期座標飛び出しを防ぐ
-    if (GAME.titleShipY === 0) {
-        GAME.titleShipY = GAME.height * 0.7;
-    }
-
-    // 既存の履歴ポイントを後方（下）へ流す
-    const trailFlowSpeed = GAME.titleLaunchTimer > 0 ? 8 + GAME.titleShipVy : 3;
-    GAME.titleLeftTrailHistory.forEach(pt => pt.y += trailFlowSpeed);
-    GAME.titleRightTrailHistory.forEach(pt => pt.y += trailFlowSpeed);
-
-    const isTitleThrusting = true;
-    const isTitleBoosting = GAME.titleLaunchTimer > 0;
-
-    const backX = GAME.width / 2;
-    const backY = GAME.titleShipY + (CONFIG.PLAYER_SIZE_W || 30) / 2;
-    const offsetDist = 5;
-
-    const leftNozzleX = backX - offsetDist;
-    const leftNozzleY = backY;
-    const rightNozzleX = backX + offsetDist;
-    const rightNozzleY = backY;
-
-    GAME.titleLeftTrailHistory.push({ x: leftNozzleX, y: leftNozzleY, active: isTitleThrusting, boost: isTitleBoosting });
-    GAME.titleRightTrailHistory.push({ x: rightNozzleX, y: rightNozzleY, active: isTitleThrusting, boost: isTitleBoosting });
-
-    const maxTitleTrailLen = 25;
-    if (GAME.titleLeftTrailHistory.length > maxTitleTrailLen) GAME.titleLeftTrailHistory.shift();
-    if (GAME.titleRightTrailHistory.length > maxTitleTrailLen) GAME.titleRightTrailHistory.shift();
-
-    // 出撃決定演出の更新
-    if (GAME.titleLaunchTimer > 0) {
-        GAME.titleLaunchTimer++;
-        GAME.titleSortieTextTimer = (GAME.titleSortieTextTimer || 0) + 1;
-
-        if (GAME.titleLaunchTimer < 105) {
-            // 自機の上昇 (Ease-In) 105フレームまで継続
-            GAME.titleShipVy += 0.8; // 加速
-            GAME.titleShipY -= GAME.titleShipVy;
-        }
-
-        // 45フレームかけて黒へフェードアウト
-        if (GAME.titleLaunchTimer <= 45) {
-            GAME.fadeAlpha = GAME.titleLaunchTimer / 45;
-        } else {
-            GAME.fadeAlpha = 1.0; // 暗転したまま待機
-        }
-
-        // 45フレーム（フェードアウト）＋60フレーム（1秒待機）＝ 105フレーム
-        if (GAME.titleLaunchTimer >= 105) {
-            // 出撃演出完了、PLAYINGに遷移！
-            resetGame();
-            GAME.state = 'PLAYING';
-            GAME.launchSequence = true;
-            GAME.launchTimer = 0;
-            GAME.fadeAlpha = 1.0; // プレイ画面へのフェードイン開始値
-
-            // タイトルで残った履歴もリセット
-            GAME.titleLeftTrailHistory = [];
-            GAME.titleRightTrailHistory = [];
-            player.leftTrailHistory = [];
-            player.rightTrailHistory = [];
-            player.leftWindTrailHistory = [];
-            player.rightWindTrailHistory = [];
-        }
-    } else {
-        // 通常待機状態での自機座標
-        GAME.titleShipY = GAME.height * 0.7; // 画面下部70%の位置
-        GAME.titleShipVy = 0;
-        GAME.fadeAlpha = 0;
-    }
-}
-
-function drawTitleScreen() {
-    const contentAlpha = Math.max(0, 1.0 - (GAME.fadeAlpha || 0));
-
-    // 遠景爆発の描画（古いパーティクル版）
-    entities.particles.forEach(p => {
-        if (p.type === 'TITLE_FLAVOR_EXP') {
-            ctx.save();
-            ctx.globalAlpha = p.life * 0.5 * contentAlpha;
-            ctx.strokeStyle = '#f80';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            const lines = 8;
-            const r = p.size * (1 - p.life * 0.5);
-            for (let i = 0; i < lines; i++) {
-                const a = (Math.PI * 2 / lines) * i;
-                ctx.moveTo(p.x + Math.cos(a) * (r * 0.3), p.y + Math.sin(a) * (r * 0.3));
-                ctx.lineTo(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r);
-            }
-            ctx.stroke();
-            ctx.restore();
-        }
-    });
-
-    // 新しいFlavor爆発の描画
-    ctx.save();
-    ctx.globalAlpha = contentAlpha;
-    entities.explosions.forEach(exp => {
-        if (exp.isFlavor) {
-            drawExplosion(ctx, exp);
-        }
-    });
-    ctx.restore();
-
-    // ─── メインロゴ (タイポグラフィ強化版) ───
-    // V : 大きく描画 (D の色収差込みの全高に合わせる)
-    // D : 色収差 (クロマティックアベレーション) 演出
-    {
-        const logoY = GAME.height * 0.25;
-        const mainFont = 'bold 54px Courier New';
-        const vFont = 'bold 70px Courier New';
-
-        // 各パーツ幅を計測
-        ctx.font = vFont;
-        const vW = ctx.measureText('V').width;
-        ctx.font = mainFont;
-        const anguarW = ctx.measureText('ANGUAR').width;
-        const dW = ctx.measureText('D').width;
-        const rifterW = ctx.measureText('RIFTER').width;
-
-        const totalW = vW + anguarW + dW + rifterW;
-        let curX = GAME.width / 2 - totalW / 2;
-
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-
-        // ── V (スケールアップ) ──
-        ctx.save();
-        ctx.globalAlpha = contentAlpha;
-        ctx.font = vFont;
-        ctx.fillStyle = '#0ff';
-        ctx.shadowColor = '#0ff';
-        ctx.shadowBlur = 22;
-        ctx.fillText('V', curX, logoY);
-        ctx.restore();
-        curX += vW;
-
-        // ── ANGUAR ──
-        ctx.save();
-        ctx.globalAlpha = contentAlpha;
-        ctx.font = mainFont;
-        ctx.fillStyle = '#0ff';
-        ctx.shadowColor = '#0ff';
-        ctx.shadowBlur = 18;
-        ctx.fillText('ANGUAR', curX, logoY);
-        ctx.restore();
-        curX += anguarW;
-
-        // ── D : 色収差 (アナグリフ) ──
-        const aberOffset = 5;
-        ctx.font = mainFont;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        // 左上 : Orb Magenta 半透明
-        ctx.save();
-        ctx.globalAlpha = 0.55 * contentAlpha;
-        ctx.fillStyle = '#ff00ff';
-        ctx.shadowBlur = 0;
-        ctx.fillText('D', curX - aberOffset, logoY - aberOffset);
-        ctx.restore();
-        // 右下 : Enemy Red 半透明
-        ctx.save();
-        ctx.globalAlpha = 0.55 * contentAlpha;
-        ctx.fillStyle = '#ff0044';
-        ctx.shadowBlur = 0;
-        ctx.fillText('D', curX + aberOffset, logoY + aberOffset);
-        ctx.restore();
-        // 中央 : Neon Cyan (メイン)
-        ctx.save();
-        ctx.globalAlpha = contentAlpha;
-        ctx.fillStyle = '#0ff';
-        ctx.shadowColor = '#0ff';
-        ctx.shadowBlur = 18;
-        ctx.fillText('D', curX, logoY);
-        ctx.restore();
-        curX += dW;
-
-        // ── RIFTER ──
-        ctx.save();
-        ctx.globalAlpha = contentAlpha;
-        ctx.font = mainFont;
-        ctx.fillStyle = '#0ff';
-        ctx.shadowColor = '#0ff';
-        ctx.shadowBlur = 18;
-        ctx.fillText('RIFTER', curX, logoY);
-        ctx.restore();
-    }
-
-    // サブタイトル
-    ctx.save();
-    ctx.globalAlpha = contentAlpha;
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 20px Courier New';
-    ctx.textAlign = 'center';
-    ctx.fillText('- STELLAR WAR SURVIVOR -', GAME.width / 2, GAME.height * 0.32);
-
-    // アルファ表記
-    ctx.fillStyle = '#888';
-    ctx.font = 'bold 14px Courier New';
-    ctx.fillText('[ ALPHA VERSION ]', GAME.width / 2, GAME.height * 0.38);
-
-    // 右下バージョン
-    ctx.fillStyle = '#666';
-    ctx.font = 'bold 12px Courier New';
-    ctx.textAlign = 'right';
-    ctx.fillText('v0.3.3 Alpha', GAME.width - 20, GAME.height - 20);
-
-    // 出撃決定テキスト
-    ctx.textAlign = 'center';
-    if (GAME.titleLaunchTimer > 0) {
-        if (Math.floor(Date.now() / 50) % 2 === 0) {
-            ctx.fillStyle = '#fff';
-        } else {
-            ctx.fillStyle = '#0ff';
-        }
-        ctx.font = 'bold 24px Courier New';
-        ctx.fillText('>>> SORTIE INITIATED <<<', GAME.width / 2, GAME.height * 0.52);
-    } else {
-        if (Math.floor(Date.now() / 500) % 2 === 0) {
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
-            ctx.font = 'bold 20px Courier New';
-            ctx.fillText('PRESS ANY BUTTON TO SORTIE', GAME.width / 2, GAME.height * 0.52);
-        }
-    }
-    ctx.restore();
-
-    // ----------------------------------------
-    // タイトル画面フェードアウト処理 (自機以外を暗転)
-    // ----------------------------------------
-    if (GAME.fadeAlpha > 0) {
-        ctx.fillStyle = `rgba(0, 0, 0, ${GAME.fadeAlpha})`;
-        ctx.fillRect(0, 0, GAME.width, GAME.height);
-    }
-
-    // タイトル画面の自機リボントレイル描画
-    if (GAME.titleLeftTrailHistory && GAME.titleLeftTrailHistory.length > 0) {
-        drawRibbonTrail(GAME.titleLeftTrailHistory, '#00d2ff', 7);
-        drawRibbonTrail(GAME.titleRightTrailHistory, '#00d2ff', 7);
-    }
-
-    // 待機中の自機描画
-    ctx.save();
-    ctx.translate(GAME.width / 2, GAME.titleShipY);
-    ctx.rotate(-Math.PI / 2); // 上向き
-    ctx.drawImage(SpriteCache.player, -SpriteCache.player.width / 2, -SpriteCache.player.height / 2);
-    ctx.restore();
-
-}
 
 function updateLevelUpScreen() {
     GAME.levelUpCursorHoverTimer++;
@@ -3186,250 +2692,7 @@ function drawLevelUpScreen() {
     });
 }
 
-function drawResultScreen() {
-    const p = GAME.resultParams;
-    if (!p) return;
 
-    const cx = GAME.width / 2;
-    const shakeX = GAME.resultShakeTimer > 0 ? (Math.random() - 0.5) * 8 : 0;
-    const shakeY = GAME.resultShakeTimer > 0 ? (Math.random() - 0.5) * 8 : 0;
-
-    // ダークブルー背景
-    ctx.fillStyle = 'rgba(0, 20, 40, 0.92)';
-    ctx.fillRect(0, 0, GAME.width, GAME.height);
-
-    ctx.save();
-    ctx.translate(shakeX, shakeY);
-
-    // ─── ヘッダー ───
-    const headerY = GAME.height * 0.10;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = 'bold 28px Courier New';
-    if (p.isClear) {
-        ctx.fillStyle = '#0ff';
-        ctx.shadowColor = '#0ff';
-        ctx.shadowBlur = 15;
-        ctx.fillText('[ MISSION ACCOMPLISHED ]', cx, headerY);
-    } else {
-        ctx.fillStyle = '#ff0044';
-        ctx.shadowColor = '#ff0044';
-        ctx.shadowBlur = 15;
-        ctx.fillText('[ MISSION FAILED ]', cx, headerY);
-    }
-    ctx.shadowBlur = 0;
-
-    // 区切り線
-    ctx.strokeStyle = p.isClear ? 'rgba(0,255,255,0.4)' : 'rgba(255,0,68,0.4)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(cx - 320, headerY + 25);
-    ctx.lineTo(cx + 320, headerY + 25);
-    ctx.stroke();
-
-    // ─── 明細行 ───
-    const lineStartY = GAME.height * 0.18;
-    const lineH = 40;
-    const labelX = cx - 30;
-    const valueX = cx + 30;
-
-    const fmtC = (v) => {
-        const sign = v >= 0 ? '+' : '';
-        return sign + v.toLocaleString() + ' C';
-    };
-    const fmtTime = (secs) => {
-        const m = Math.floor(secs / 60).toString().padStart(2, '0');
-        const s = (secs % 60).toString().padStart(2, '0');
-        return m + ':' + s;
-    };
-
-    const lines = [
-        { label: 'OPERATION TIME', value: fmtTime(p.operationTime), color: '#fff' },
-        { label: 'BASE REWARD', value: fmtC(p.baseReward), color: '#0ff' },
-        { label: `KILL BOUNTY  x${p.score}`, value: fmtC(p.bounty), color: '#0ff' },
-        { label: 'TIME BONUS', value: fmtC(p.timeBonus), color: '#0ff' },
-        { label: 'REPAIR COST', value: fmtC(-p.repairCost), color: '#ff0044' },
-        { label: 'EMERGENCY RECOVERY FEE', value: fmtC(-p.emergencyFee), color: '#ff0044' },
-    ];
-
-    ctx.font = 'bold 17px Courier New';
-    ctx.textBaseline = 'middle';
-    for (let i = 0; i < lines.length; i++) {
-        if (i >= GAME.resultShowIndex) break;
-        const ln = lines[i];
-        const ly = lineStartY + i * lineH;
-        ctx.textAlign = 'right';
-        ctx.fillStyle = '#778899';
-        ctx.fillText(ln.label + ' :', labelX, ly);
-        ctx.textAlign = 'left';
-        ctx.fillStyle = ln.color;
-        ctx.fillText(ln.value, valueX, ly);
-    }
-
-    // ─── NET PROFIT ───
-    if (GAME.resultShowIndex >= 6) {
-        const netBaseY = lineStartY + lines.length * lineH + 10;
-
-        ctx.strokeStyle = p.netProfit >= 0 ? 'rgba(0,255,255,0.4)' : 'rgba(255,0,68,0.4)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(cx - 320, netBaseY - 8);
-        ctx.lineTo(cx + 320, netBaseY - 8);
-        ctx.stroke();
-
-        ctx.font = 'bold 14px Courier New';
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#778899';
-        ctx.fillText('NET PROFIT :', labelX, netBaseY + 20);
-        ctx.textAlign = 'left';
-        ctx.font = 'bold 34px Courier New';
-        const profitColor = p.netProfit >= 0 ? '#0ff' : '#ff0044';
-        ctx.fillStyle = profitColor;
-        ctx.shadowColor = profitColor;
-        ctx.shadowBlur = 12;
-        ctx.fillText(fmtC(p.netProfit), valueX, netBaseY + 20);
-        ctx.shadowBlur = 0;
-    }
-
-    // ─── シエロ通信（タイプライター） ───
-    if (GAME.resultShowIndex >= 6 && GAME.resultSieloText) {
-        const sieloY = GAME.height * 0.68;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = 'bold 15px Courier New';
-        ctx.fillStyle = '#00cc44';
-        const shown = GAME.resultSieloText.substring(0, GAME.resultSieloShowCharCount);
-        ctx.fillText('[ NAVI : シエロ ]  ' + shown, cx, sieloY);
-    }
-
-    // ─── スタンプ ───
-    if (GAME.resultStampTimer > 0) {
-        const stampY = lineStartY + lines.length * lineH * 0.55;
-        ctx.save();
-        ctx.translate(cx, stampY);
-        ctx.rotate(-15 * Math.PI / 180);
-        ctx.scale(GAME.resultStampScale, GAME.resultStampScale);
-
-        const stampText = p.netProfit >= 0 ? '[ SETTLED ]' : '[ DEBT EXECUTED ]';
-        const stampColor = p.netProfit >= 0 ? '#0ff' : '#ff0044';
-        ctx.font = 'bold 44px Courier New';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.globalAlpha = 0.82;
-        ctx.strokeStyle = stampColor;
-        ctx.lineWidth = 3 / Math.max(GAME.resultStampScale, 0.5);
-        const tw = ctx.measureText(stampText).width;
-        ctx.strokeRect(-tw / 2 - 12, -34, tw + 24, 68);
-        ctx.fillStyle = stampColor;
-        ctx.fillText(stampText, 0, 0);
-        ctx.globalAlpha = 1.0;
-        ctx.restore();
-    }
-
-    // ─── 選択ボタン ───
-    if (GAME.resultShowIndex >= 6) {
-        const btnY1 = GAME.height * 0.77;
-        const btnY2 = GAME.height * 0.84;
-        const blink = Math.floor(Date.now() / 500) % 2 === 0;
-
-        ctx.font = 'bold 18px Courier New';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        if (GAME.resultSelection === 0) {
-            ctx.fillStyle = blink ? '#fff' : '#0ff';
-            ctx.fillText('[ > ]  RETURN TO GARAGE', cx, btnY1);
-        } else {
-            ctx.fillStyle = '#444';
-            ctx.fillText('       RETURN TO GARAGE', cx, btnY1);
-        }
-
-        if (GAME.resultSelection === 1) {
-            ctx.fillStyle = blink ? '#fff' : '#0ff';
-            ctx.fillText('[ > ]  RETRY MISSION', cx, btnY2);
-        } else {
-            ctx.fillStyle = '#444';
-            ctx.fillText('       RETRY MISSION', cx, btnY2);
-        }
-
-        // 操作ヒント
-        ctx.font = 'bold 12px Courier New';
-        ctx.fillStyle = 'rgba(100,150,180,0.6)';
-        ctx.fillText('W/S or ↑↓ : SELECT    ENTER or SPACE : CONFIRM', cx, GAME.height * 0.91);
-    }
-
-    ctx.restore(); // shake 終了
-}
-
-function updateResultScreen() {
-    GAME.resultTimer++;
-
-    const targetIndex = Math.min(7, Math.floor(GAME.resultTimer / 30));
-    if (GAME.resultShowIndex < targetIndex) {
-        GAME.resultShowIndex = targetIndex;
-    }
-
-    if (GAME.resultShowIndex >= 6 && GAME.resultSieloShowCharCount < GAME.resultSieloText.length) {
-        GAME.resultSieloTimer++;
-        if (GAME.resultSieloTimer % 2 === 0) {
-            GAME.resultSieloShowCharCount++;
-        }
-    }
-
-    if (GAME.resultSieloShowCharCount >= GAME.resultSieloText.length && GAME.resultShowIndex >= 6) {
-        if (GAME.resultStampTimer === 0) {
-            GAME.resultStampTimer = 1;
-        }
-    }
-
-    if (GAME.resultStampTimer > 0 && GAME.resultStampTimer < 12) {
-        GAME.resultStampTimer++;
-        const progress = GAME.resultStampTimer / 12;
-        GAME.resultStampScale = 3.0 - progress * 2.0;
-
-        if (GAME.resultStampTimer === 12) {
-            GAME.resultShakeTimer = 15;
-        }
-    }
-
-    if (GAME.resultShakeTimer > 0) {
-        GAME.resultShakeTimer--;
-    }
-
-    GAME.resultSelectionBlink++;
-
-    const btnW = 280;
-    const btnH = 45;
-    const btnX = GAME.width / 2 - btnW / 2;
-    const btnY1 = GAME.height * 0.76;
-    const btnY2 = GAME.height * 0.83;
-
-    if (mouse.x >= btnX && mouse.x <= btnX + btnW) {
-        if (mouse.y >= btnY1 && mouse.y <= btnY1 + btnH) {
-            GAME.resultSelection = 0;
-            if (mouse.leftDown) {
-                mouse.leftDown = false;
-                GAME.state = 'TITLE';
-                GAME.titleLaunchTimer = 0;
-                GAME.fadeAlpha = 0;
-                GAME.titleLeftTrailHistory = [];
-                GAME.titleRightTrailHistory = [];
-                player.leftTrailHistory = [];
-                player.rightTrailHistory = [];
-                player.leftWindTrailHistory = [];
-                player.rightWindTrailHistory = [];
-            }
-        } else if (mouse.y >= btnY2 && mouse.y <= btnY2 + btnH) {
-            GAME.resultSelection = 1;
-            if (mouse.leftDown) {
-                mouse.leftDown = false;
-                resetGame();
-                GAME.state = 'PLAYING';
-            }
-        }
-    }
-}
 
 // ==========================================
 // 5. 描画フェーズ (Rendering)
@@ -3439,119 +2702,7 @@ const ctx = canvas.getContext('2d');
 canvas.width = GAME.width;
 canvas.height = GAME.height;
 
-const Minimap = {
-    draw(ctx) {
-        if (GAME.state !== 'PLAYING' || GAME.launchSequence || player.isLandingSequence) return;
-        const size = CONFIG.MINIMAP_SIZE;
-        const margin = CONFIG.MINIMAP_MARGIN;
-        const x = GAME.width - size - margin;
-        const y = margin;
 
-        ctx.save();
-        ctx.translate(x, y);
-
-        // 背景
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 1;
-        ctx.fillRect(0, 0, size, size);
-        ctx.strokeRect(0, 0, size, size);
-
-        ctx.beginPath();
-        ctx.rect(0, 0, size, size);
-        ctx.clip();
-
-        // グリッド描画
-        const scale = CONFIG.MINIMAP_SCALE;
-        const gridInterval = CONFIG.MINIMAP_GRID_INTERVAL;
-        const viewSizeM = size * scale;
-        const halfViewM = viewSizeM / 2;
-        const startXM = player.x - halfViewM;
-        const startYM = player.y - halfViewM;
-
-        ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-
-        const firstGridX = Math.floor(startXM / gridInterval) * gridInterval;
-        for (let gx = firstGridX; gx < startXM + viewSizeM; gx += gridInterval) {
-            const screenX = (gx - startXM) / scale;
-            ctx.moveTo(screenX, 0);
-            ctx.lineTo(screenX, size);
-        }
-        const firstGridY = Math.floor(startYM / gridInterval) * gridInterval;
-        for (let gy = firstGridY; gy < startYM + viewSizeM; gy += gridInterval) {
-            const screenY = (gy - startYM) / scale;
-            ctx.moveTo(0, screenY);
-            ctx.lineTo(size, screenY);
-        }
-        ctx.stroke();
-
-        // 要素の描画ヘルパー
-        const drawDot = (ex, ey, color, radius, isOutlineWhite = true) => {
-            const sx = (ex - startXM) / scale;
-            const sy = (ey - startYM) / scale;
-            if (sx >= -radius && sx <= size + radius && sy >= -radius && sy <= size + radius) {
-                ctx.fillStyle = color;
-                if (isOutlineWhite) {
-                    ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 1;
-                }
-                ctx.beginPath();
-                ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-                ctx.fill();
-                if (isOutlineWhite) ctx.stroke();
-            }
-        };
-
-        // 資源 (gems)
-        entities.gems.forEach(g => {
-            let c = '#aaa';
-            if (g.kind === 'EXP') c = '#0ff';
-            if (g.kind === 'BIG_EXP') c = '#ff0';
-            if (g.kind === 'HEAL') c = '#0f0';
-            drawDot(g.x, g.y, c, 1.5, false);
-        });
-
-        // 敵
-        entities.enemies.forEach(e => {
-            drawDot(e.x, e.y, e.color || '#f00', 2.5);
-        });
-
-        // 母艦
-        drawDot(CONFIG.MOTHERSHIP_X, CONFIG.MOTHERSHIP_Y, '#000', 4);
-
-        // 敵母艦
-        if (entities.enemyMothership && !entities.enemyMothership.isDead) {
-            drawDot(entities.enemyMothership.x, entities.enemyMothership.y, '#000', 4);
-        }
-
-        // 自機
-        drawDot(player.x, player.y, '#0f0', 2.5);
-
-        // 自機座標表示 (v0.5.00要件)
-        ctx.restore(); // clip解除とtranslate解除
-
-        ctx.save();
-        ctx.translate(x, y + size - 20); // コンテナ下部
-
-        // 背景黒帯
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(5, 0, size - 10, 18);
-
-        ctx.font = 'bold 10px Courier New';
-        ctx.fillStyle = '#0ff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const formatCoord = (v) => {
-            const sign = v < 0 ? '-' : '+';
-            return sign + Math.abs(Math.round(v)).toString().padStart(5, '0');
-        };
-        ctx.fillText(`X: ${formatCoord(player.x)} Y: ${formatCoord(player.y)}`, size / 2, 9);
-
-        ctx.restore();
-    }
-};
 
 const CommStateManager = {
     handleInput: function (e) {
@@ -3708,7 +2859,7 @@ function draw() {
     ctx.globalAlpha = 1.0;
 
     if (GAME.state === 'TITLE') {
-        drawTitleScreen();
+        SceneManager.title.draw(ctx);
         return;
     }
     if (GAME.state === 'LEVEL_UP') {
@@ -3716,7 +2867,7 @@ function draw() {
         return;
     }
     if (GAME.state === 'RESULT') {
-        drawResultScreen();
+        SceneManager.result.draw(ctx);
         return;
     }
 
@@ -4115,53 +3266,6 @@ function draw() {
         drawRibbonTrail(player.rightTrailHistory, '#00d2ff', 7); // トムキャット風のツインバーニア（シアンブルー）
     }
 
-    // =================================================================
-    // 【主人公専用演出】ベクターパス方式による風トレイル（スリップストリーム）
-    // =================================================================
-    const drawWindTrail = (history) => {
-        if (history && history.length >= 2) {
-            // 速度に基づくアルファ値の計算
-            const latestSpeed = Math.hypot(player.vx, player.vy);
-            const safeMaxSpeed = Math.max(playerStats.maxSpeed, CONFIG.WIND_TRAIL_MIN_SPEED + 0.1);
-            const speedRatio = Math.max(0, Math.min(1.0, (latestSpeed - CONFIG.WIND_TRAIL_MIN_SPEED) / (safeMaxSpeed - CONFIG.WIND_TRAIL_MIN_SPEED)));
-
-            if (speedRatio <= 0) return;
-
-            ctx.save();
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = `rgba(255, 255, 255, ${speedRatio * 0.25})`; // 白色、速度に応じたアルファ
-
-            // トレイルの太さを曲線（Math.sin）で計算し、セグメントごとに描画する
-            // 最大幅はメインバーニア(7)の半分(=3.5)
-            const maxWidth = 3.5;
-
-            for (let i = 0; i < history.length - 1; i++) {
-                const p1 = history[i];
-                const p2 = history[i + 1];
-
-                // 全体の中での位置 (0.0 〜 1.0)
-                const ratio = (i + 0.5) / (history.length - 1);
-
-                // sinカーブで 0 -> 1 -> 0 になるよう太さを設定
-                ctx.lineWidth = maxWidth * Math.sin(ratio * Math.PI);
-
-                ctx.beginPath();
-                ctx.moveTo(p1.x, p1.y);
-
-                if (i === history.length - 2) {
-                    ctx.lineTo(p2.x, p2.y);
-                } else {
-                    const midX = (p1.x + p2.x) / 2;
-                    const midY = (p1.y + p2.y) / 2;
-                    ctx.quadraticCurveTo(p1.x, p1.y, midX, midY);
-                }
-                ctx.stroke();
-            }
-
-            ctx.restore();
-        }
-    };
     drawWindTrail(player.leftWindTrailHistory);
     drawWindTrail(player.rightWindTrailHistory);
     // =================================================================
@@ -4333,317 +3437,9 @@ function draw() {
     ctx.restore(); // カメラ適用終了
 
     // ----------------------------------------
-    // プレイヤー中心レーダーと敵方向マーカー描画
+    // プレイヤー中心レーダーと敵方向マーカー描画 (抽出先: radar.js)
     // ----------------------------------------
-    if (!GAME.isPlayerDying && !GAME.launchSequence && !player.isLandingSequence) {
-        ctx.save();
-        ctx.translate(GAME.width / 2, GAME.height / 2);
-
-        // レーダーゲージ（真円）
-        const radarRadius = CONFIG.RADAR_RADIUS;
-        ctx.strokeStyle = 'rgba(255, 0, 0, 1.0)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(0, 0, radarRadius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // ヒゲ（東西南北＋斜め45度）
-        for (let i = 0; i < 8; i++) {
-            const a = (Math.PI / 4) * i;
-            const cosA = Math.cos(a);
-            const sinA = Math.sin(a);
-            ctx.beginPath();
-            // 5px外側に飛び出すヒゲ
-            ctx.moveTo(cosA * radarRadius, sinA * radarRadius);
-            ctx.lineTo(cosA * (radarRadius + 5), sinA * (radarRadius + 5));
-            ctx.stroke();
-        }
-
-        // 砲塔方向を示す TARGET マーカー（▲とTARGETの文字）
-        ctx.save();
-        ctx.rotate(player.turretAngle);
-        ctx.fillStyle = '#0f0'; // 自機と同じ色(緑)
-        // ▲アイコンをレーダー内側に表示 (サイズ拡大)
-        ctx.beginPath();
-        ctx.moveTo(radarRadius - 15, 0); // 先端 (外側へ)
-        ctx.lineTo(radarRadius - 35, -8); // 後ろ上 (幅を広げ、後ろに引く)
-        ctx.lineTo(radarRadius - 35, 8);  // 後ろ下
-        ctx.closePath();
-        ctx.fill();
-
-        // TARGET文字 (重なり防止のため、底辺からさらに内側へ離す)
-        ctx.font = 'bold 10px Courier New';
-        ctx.fillStyle = '#0f0'; // 文字も自機色(緑)に
-        ctx.textAlign = 'center';
-
-        // 底辺の中心 (radarRadius - 35, 0) からさらに離し、(radarRadius - 45, 0) に翻訳
-        ctx.translate(radarRadius - 45, 0);
-
-        let textAngle = player.turretAngle;
-        while (textAngle < 0) textAngle += Math.PI * 2;
-        textAngle = textAngle % (Math.PI * 2);
-
-        // 画面下半分の角度では文字が裏返らないように180度反転
-        // 重なりを防ぐため、常にレーダーの中心寄りに押し出すよう textBaseline を出し分け
-        if (textAngle > Math.PI / 2 && textAngle < Math.PI * 1.5) {
-            ctx.rotate(-Math.PI / 2);
-            ctx.textBaseline = 'bottom';
-            ctx.fillText('TARGET', 0, -2);
-        } else {
-            ctx.rotate(Math.PI / 2);
-            ctx.textBaseline = 'top';
-            ctx.fillText('TARGET', 0, 2);
-        }
-        ctx.restore();
-
-        // --- 母艦（Anchor Garage）への方向マーカー ---
-        const msDx = CONFIG.MOTHERSHIP_X - player.x;
-        const msDy = CONFIG.MOTHERSHIP_Y - player.y;
-        const msAngle = Math.atan2(msDy, msDx);
-        const msDist = Math.hypot(msDx, msDy);
-
-        // 母艦が画面内に十分入っているか判定（表示内ならレーダーを非表示にする）
-        // 画面端からのマージンを考慮して判定（画面外へ少し出たらすぐレーダーがガイドするよう +200 程度余裕を持たせる）
-        const isMsVisible = Math.abs(msDx) <= GAME.width / 2 + 200 && Math.abs(msDy) <= GAME.height / 2 + 200;
-
-        if (!isMsVisible) {
-            // 距離のフォーマット (1~999m、1.0km～で表記切り替え)
-            const msDistRounded = Math.floor(msDist);
-            let msDistStr = "";
-            if (msDistRounded >= 1000) {
-                msDistStr = (msDist / 1000).toFixed(1) + "km";
-            } else {
-                msDistStr = Math.max(1, msDistRounded) + "m";
-            }
-
-            ctx.save();
-            ctx.rotate(msAngle);
-            ctx.fillStyle = '#fff'; // 母艦のレーダーアイコンは白にする
-
-            // ▲アイコンをレーダー内側に表示 (TARGETと同じサイズに拡大)
-            ctx.beginPath();
-            ctx.moveTo(radarRadius - 15, 0); // 先端
-            ctx.lineTo(radarRadius - 35, -8); // 後ろ上
-            ctx.lineTo(radarRadius - 35, 8);  // 後ろ下
-            ctx.closePath();
-            ctx.fill();
-
-            // 三角の下側（レーダーの中心側）に A.GARAGE と距離を表示 (白にする)
-            // テキストも三角の回転に合わせて一緒に回転する
-            ctx.fillStyle = '#fff'; // テキスト・距離も白
-            ctx.textAlign = 'center';
-
-            // 底辺の中心から十分離し、(radarRadius - 45, 0) に翻訳
-            ctx.translate(radarRadius - 45, 0);
-
-            let msTextAngle = msAngle;
-            while (msTextAngle < 0) msTextAngle += Math.PI * 2;
-            msTextAngle = msTextAngle % (Math.PI * 2);
-
-            // 画面下半分の角度では文字が裏返らないように180度反転
-            // 重なりを防ぐため、常にレーダーの中心寄りに押し出すよう textBaseline とテキスト位置を調整
-            if (msTextAngle > Math.PI / 2 && msTextAngle < Math.PI * 1.5) {
-                ctx.rotate(-Math.PI / 2);
-                ctx.textBaseline = 'bottom';
-                ctx.font = 'bold 10px Courier New';
-                ctx.fillText('A.GARAGE', 0, -18);
-                ctx.font = 'bold 16px Courier New';
-                ctx.fillText(msDistStr, 0, -2);
-            } else {
-                ctx.rotate(Math.PI / 2);
-                ctx.textBaseline = 'top';
-                ctx.font = 'bold 10px Courier New';
-                ctx.fillText('A.GARAGE', 0, 18);
-                ctx.font = 'bold 16px Courier New';
-                ctx.fillText(msDistStr, 0, 2);
-            }
-            ctx.restore();
-        }
-
-        // 画面外エネミーの方向マーカーと距離表示
-        entities.enemies.forEach(e => {
-            const dx = e.x - player.x;
-            const dy = e.y - player.y;
-            const dist = Math.hypot(dx, dy);
-            const halfW = GAME.width / 2;
-            const halfH = GAME.height / 2;
-
-            // 画面外にいる敵のみ表示
-            if (Math.abs(dx) > halfW || Math.abs(dy) > halfH) {
-                const angle = Math.atan2(dy, dx);
-
-                ctx.save();
-                // 真円のすぐ外側（半径 + 15pxの位置）にマーカーを配置
-                const markerX = Math.cos(angle) * (radarRadius + 15);
-                const markerY = Math.sin(angle) * (radarRadius + 15);
-                ctx.translate(markerX, markerY);
-
-                // マーカー本体の描画（回転させる）
-                ctx.save();
-                ctx.rotate(angle + Math.PI / 2); // ▲の頂点が敵の方向を向くように回転
-
-                ctx.fillStyle = 'rgba(255, 50, 50, 0.8)';
-                ctx.strokeStyle = 'rgba(255, 50, 50, 0.8)';
-
-                // 赤い▲
-                ctx.beginPath();
-                ctx.moveTo(0, -8);  // 少し小ぶりに調整
-                ctx.lineTo(-6, 4);
-                ctx.lineTo(6, 4);
-                ctx.closePath();
-                ctx.fill();
-
-                // 下部の線（天地を示す ＿）
-                ctx.beginPath();
-                ctx.moveTo(-8, 6);
-                ctx.lineTo(8, 6);
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                ctx.restore(); // マーカーの回転リセット
-
-                // 距離テキストの描画（回転させず水平を保つ）
-                let distText = "";
-                if (dist >= 999) {
-                    distText = (dist / 1000).toFixed(1) + "km";
-                } else {
-                    distText = Math.floor(dist) + "m";
-                }
-
-                // テキスト位置をさらに外側へ押し出す
-                const textOffset = 18;
-                const textX = Math.cos(angle) * textOffset;
-                const textY = Math.sin(angle) * textOffset;
-
-                ctx.fillStyle = 'rgba(255, 50, 50, 0.9)';
-                ctx.font = 'bold 12px Courier New';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(distText, textX, textY);
-
-                // 敵の残りHP表示
-                const hpRatio = Math.max(0, e.hp / e.maxHp);
-                const hpPercent = Math.floor(hpRatio * 100);
-                ctx.font = '10px Courier New';
-                ctx.fillStyle = hpRatio > 0.5 ? '#0f0' : hpRatio > 0.25 ? '#ff0' : '#f00';
-                ctx.fillText(`HP:${hpPercent}%`, textX, textY + 12);
-
-                ctx.restore(); // 位置リセット
-            }
-        });
-
-        // 資源レーダー (画面外のEXP, BIG_EXP, HEAL を表示)
-        entities.gems.forEach(g => {
-            if (g.kind !== 'EXP' && g.kind !== 'BIG_EXP' && g.kind !== 'HEAL') return;
-
-            const dx = g.x - player.x;
-            const dy = g.y - player.y;
-            const dist = Math.hypot(dx, dy);
-            const halfW = GAME.width / 2;
-            const halfH = GAME.height / 2;
-
-            // 最大距離5000mのアイテムを表示（画面内にある場合も表示する）
-            if (dist <= 5000) {
-                const angle = Math.atan2(dy, dx);
-
-                // 画面外境界（おおよそ 500px とみなす）からの距離超過分
-                // 画面内(overDist=0)の場合は alpha=1.0 となる
-                const overDist = Math.max(0, dist - Math.max(halfW, halfH));
-                // 200m(px)ごとに alpha が 0.1 下がる。最大透明度80% (alpha 0.2)
-                const alphaDrop = Math.floor(overDist / 200) * 0.1;
-                const alpha = Math.max(0.2, 1.0 - alphaDrop);
-
-                let color = '#0ff'; // EXP
-                if (g.kind === 'BIG_EXP') color = '#ff0';
-                if (g.kind === 'HEAL') color = '#0f0';
-
-                ctx.save();
-                ctx.rotate(angle);
-
-                // 母艦マーカー(幅20、長さ35)の半分サイズ(幅10、長さ17.5)の▲を描画
-                ctx.fillStyle = color;
-                ctx.globalAlpha = alpha;
-
-                ctx.beginPath();
-                ctx.moveTo(radarRadius - 10, 0); // 先端
-                ctx.lineTo(radarRadius - 27.5, -5); // 後ろ上
-                ctx.lineTo(radarRadius - 27.5, 5);  // 後ろ下
-                ctx.closePath();
-                ctx.fill();
-
-                ctx.restore();
-            }
-        });
-        // --- v0.5.00 マイクロHUD拡張 ---
-        // ※すでにレーダー中心に translate されているコンテキスト内で実行
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = 'bold 12px Courier New';
-        ctx.shadowColor = '#000';
-        ctx.shadowBlur = 4;
-
-        // 上部（内側）：レベル＆経験値 (12時方向)
-        ctx.fillStyle = '#00ffff';
-        const levelText = `Lv.${playerStats.level.toString().padStart(3, '0')}  Exp.${playerStats.exp}/${playerStats.nextLevelExp}`;
-        drawCircularText(ctx, levelText, radarRadius - 7, -Math.PI / 2, false);
-
-        // スピード＆Gフォースの計算
-        const speedKms = ((Math.hypot(player.vx, player.vy) * 60) / 1000).toFixed(1);
-        const prevVx = player.prevVx || 0;
-        const prevVy = player.prevVy || 0;
-        const gForce = (Math.hypot(player.vx - prevVx, player.vy - prevVy) * 1.5).toFixed(1);
-
-        // 下部（内側）：1行にまとめる
-        ctx.fillStyle = '#ffa500';
-        const speedAccText = `SPD:${speedKms}km/s  ACC:${gForce}G`;
-        drawCircularText(ctx, speedAccText, radarRadius - 6, Math.PI / 1.95, true);
-
-        ctx.restore();
-
-        // C. ダイナミック・コンテクスト・アラート
-        // 優先度: WARNING > OVERHEAT > DOCK INBOUND
-        let alertText = "";
-        let alertColor = "";
-
-        let isWarning = player.flashTimer > 0;
-        if (!isWarning) {
-            for (let i = 0; i < entities.enemies.length; i++) {
-                const e = entities.enemies[i];
-                if (Math.hypot(e.x - player.x, e.y - player.y) < 300) {
-                    isWarning = true;
-                    break;
-                }
-            }
-        }
-
-        if (isWarning) {
-            alertText = "WARNING";
-            alertColor = "#f00";
-        } else if (player.isOverheated) {
-            alertText = "OVERHEAT";
-            alertColor = "#f80";
-        } else if (!GAME.launchSequence && !player.isLandingSequence) {
-            const msDist = Math.hypot(CONFIG.MOTHERSHIP_X - player.x, CONFIG.MOTHERSHIP_Y - player.y);
-            if (msDist < 500 && Math.hypot(player.vx, player.vy) < 2) {
-                alertText = "DOCK INBOUND";
-                alertColor = "#0f0";
-            }
-        }
-
-        if (alertText) {
-            const alpha = (Math.sin(Date.now() / 150) + 1) / 2 * 0.5 + 0.5;
-            ctx.globalAlpha = alpha;
-            ctx.font = 'bold 16px Courier New';
-            ctx.fillStyle = alertColor;
-            ctx.shadowColor = alertColor;
-            ctx.shadowBlur = 8;
-            ctx.fillText(alertText, 0, -50);
-        }
-
-        CommStateManager.draw(ctx, radarRadius);
-
-        ctx.restore();
-    }
+    Radar.draw(ctx, player, entities, CONFIG, GAME);
 
     // ----------------------------------------
     // 被弾時の画面全体赤フラッシュ演出
@@ -4703,7 +3499,7 @@ function draw() {
     }
 
     // ミニマップ描画
-    Minimap.draw(ctx);
+    MapManager.draw(ctx, player, entities, CONFIG, GAME);
 
     // ----------------------------------------
     // 画面全体のフェード処理

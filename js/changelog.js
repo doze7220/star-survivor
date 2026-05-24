@@ -1,5 +1,32 @@
 const changelog = [
   {
+    version: "v0.5.07",
+    date: "2026-05-24",
+    description: "Refactoring Phase 2c: Extracted Title and Result scenes into separate modules.",
+    details: [
+      "【リファクタリング】`main.js` からタイトル画面のロジック（更新および描画）を抽出し、`js/scenes/TitleScene.js` として分離（カプセル化）",
+      "【リファクタリング】`main.js` からリザルト画面のロジック（初期化、更新、描画）を抽出し、`js/scenes/ResultScene.js` として分離（カプセル化）",
+      "【システム変更】`main.js` 内に `SceneManager` を導入し、抽出した各シーンクラスのインスタンスを管理・呼び出すように構造を変更"
+    ]
+  },
+  {
+    version: "v0.5.06",
+    date: "2026-05-24",
+    description: "Refactoring Phase 2b: Extracted minimap drawing logic and fixed ACC display bug.",
+    details: [
+      "【バグ修正】レーダーのACC（加速度/Gフォース）表示が0.0Gのまま更新されない問題を修正（prevVx, prevVyの保存タイミングをupdateループの先頭へ移動）",
+      "【リファクタリング】`main.js` から画面右上のミニマップ描画ロジックを抽出し、`js/map.js` に `MapManager` オブジェクトとして分離（将来的な全体マップ拡張へ対応するための構造化）"
+    ]
+  },
+  {
+    version: "v0.5.05",
+    date: "2026-05-24",
+    description: "Refactoring Phase 2a: Extracted radar drawing logic.",
+    details: [
+      "【リファクタリング】`main.js` からレーダーの描画ロジック（ゲージ、ターゲットマーカー、母艦方向、敵方向、資源表示、マイクロHUD、ダイナミックアラート）を抽出し、`js/radar.js` の `Radar.draw` メソッドへ分離（完全互換維持）"
+    ]
+  },
+  {
     version: "v0.3.12",
     date: "2026-05-23",
     description: "Re-implemented and completed the enemy balance adjustments and level-up communication UI bug fixes after an IDE crash.",
