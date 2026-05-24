@@ -1,5 +1,14 @@
 const changelog = [
   {
+    version: "v0.5.23",
+    date: "2026-05-25",
+    description: "Refactoring: Unified multiple input handlers into a single file.",
+    details: [
+      "【リファクタリング】`js/utils/` 配下に分散していた入力ハンドラ関数（`handleTitleInput`, `handleResultInput`, `handleLevelUpInput`, `handlePlayingInput`, `handleCommInput`）を `handleInput.js` 1ファイルに統合",
+      "【最適化】`index.html` のscriptタグの読み込みをさらに削減"
+    ]
+  },
+  {
     version: "v0.5.22",
     date: "2026-05-25",
     description: "Refactoring: Unified multiple init functions into a single file.",
