@@ -1,5 +1,17 @@
 const changelog = [
   {
+    version: "v0.5.30",
+    date: "2026-05-27",
+    description: "Refactoring: Phase 3 Step 2 - PlayerShip.update() を実装し操作ロジックをカプセル化。",
+    details: [
+      "【リファクタリング】PlayerShip.prototype.update(GAME, entities) を追加。prevVx/prevVy保存・LaunchSequence・ブーストゲージ・旋回/推力・タクティカルブレーキ・着艦シーケンス・ヒートゲージ・射撃・ミサイル発射を完全移植",
+      "【リファクタリング】物理演算箇所（摩擦→速度クランプ→座標更新）を super.updatePhysics(currentMaxSpeed) に委譲",
+      "【リファクタリング】main.js の update() 内プレイヤーロジックを player.update(GAME, entities) の1行に置換",
+      "【変更なし】HUD DOM操作・星スクロール・トレイル更新・衝突判定は main.js に残存。EnemyShip・描画系・衝突判定は一切変更なし",
+      "【保証】処理順序（boost消費順・heat加算順・firing timing・recoil timing・tactical brake・launch/landing sequence順序・particle生成順）は完全維持"
+    ]
+  },
+  {
     version: "v0.5.29",
     date: "2026-05-27",
     description: "Refactoring: Phase 3 Step 1 - Ship 基底クラスに updatePhysics() / takeDamage() を追加。",

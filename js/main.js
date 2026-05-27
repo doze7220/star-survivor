@@ -288,6 +288,423 @@ class PlayerShip extends Ship {
         this.prevVy = 0;
         this._hpWarningPlayed = false;
     }
+
+    /**
+     * プレイヤー更新: 操作入力 → 物理演算 → 射撃 → ミサイル
+     * HUD DOM操作・星スクロール・トレイル更新・衝突判定は main.js に残す。
+     * 物理演算は super.updatePhysics(currentMaxSpeed) に委譲する。
+     */
+    update(GAME, entities) {
+        // 加速度（ACC）計算のため、現在の速度を前のフレームの速度として保存
+        this.prevVx = this.vx;
+        this.prevVy = this.vy;
+
+        // --- Launch Sequence Countdown Update ---
+        if (GAME.launchSequence) {
+            GAME.launchTimer = (GAME.launchTimer || 0) + 1;
+
+            if (GAME.launchTimer === 1) {
+                comm.play("カタパルト接続完了！出撃システム起動！");
+            }
+
+            if (GAME.launchTimer > 240) {
+                // Launch sequence complete!
+                GAME.launchSequence = false;
+            } else if (GAME.launchTimer > 180) {
+                // GO! boost behavior:
+                this.vx = 0;
+                this.vy = -12; // Out of dock boost!
+                this.bodyAngle = -Math.PI / 2;
+                this.turretAngle = -Math.PI / 2;
+            }
+        }
+
+        // --- Phase 2: 物理と操作 (Drift Physics) ---
+        const canControl = !GAME.isPlayerDying && !this.isLandingSequence && !GAME.launchSequence;
+        if (canControl) {
+            //playerStats.handling = CONFIG.PLAYER_BASE_HANDLING + (playerStats.upgrades.handling - 1) * 0.015;
+            playerStats.handling = CONFIG.PLAYER_BASE_HANDLING + (playerStats.upgrades.maneuver || 0) * 0.015;
+
+        }
+
+        // --- ブーストゲージ (SHIFT) ---
+        if (!GAME.isPlayerDying && !this.isLandingSequence) {
+            if (playerStats.autoRepairCooldown > 0) {
+                playerStats.autoRepairCooldown--;
+            }
+
+            const boosterLv = playerStats.upgrades.booster || 0;
+            const maxBoostGauge = 80 + (boosterLv * 20); // 増量
+            const baseCooldown = 360 - (boosterLv * 30); // 使い切り時CD
+            const cancelCooldown = 180 - (boosterLv * 15); // 途中解除時CD
+
+            if (this.boostGauge === undefined) {
+                this.boostGauge = maxBoostGauge;
+                this.boostActiveTimer = 0;
+                this.boostCooldownTimer = 0;
+            }
+            if (this.boostGauge > maxBoostGauge) {
+                this.boostGauge = maxBoostGauge;
+            }
+
+            const isHoldingShift = (InputManager.isPressed('ShiftLeft') || InputManager.isPressed('ShiftRight')) && !this.isOverheated;
+            const canBoost = this.boostGauge > 0 && this.boostCooldownTimer <= 0;
+            const isBoosting = isHoldingShift && canBoost;
+
+            if (isBoosting) {
+                if (this.boostActiveTimer === 0) {
+                    playerStats.heat = Math.min(CONFIG.HEAT_MAX, playerStats.heat + 20); // 使用直後に+20
+                    comm.play("ブースト全開ですね！");
+                } else if (this.boostActiveTimer % 5 === 0) {
+                    playerStats.heat = Math.min(CONFIG.HEAT_MAX, playerStats.heat + 1); // 以後+1/5F
+                }
+
+                this.boostGauge--;
+                this.boostActiveTimer++;
+
+                if (this.boostGauge <= 0) {
+                    // 使い続けた場合のクールダウン
+                    this.boostCooldownTimer = baseCooldown;
+                    this.boostActiveTimer = 0;
+                }
+            } else {
+                if (this.boostActiveTimer > 0) {
+                    // 途中で離した場合のクールダウン
+                    this.boostCooldownTimer = cancelCooldown;
+                    this.boostActiveTimer = 0;
+                }
+
+                if (this.boostCooldownTimer > 0) {
+                    this.boostCooldownTimer--;
+                } else if (this.boostGauge < maxBoostGauge) {
+                    // クールダウン終了後に回復 (1/F)
+                    this.boostGauge++;
+                }
+            }
+        }
+
+        if (canControl) {
+            const turnLeft = InputManager.isPressed('KeyA') || InputManager.isPressed('ArrowLeft');
+            const turnRight = InputManager.isPressed('KeyD') || InputManager.isPressed('ArrowRight');
+            const hasManualTurn = turnLeft || turnRight;
+
+            if (turnLeft) {
+                this.bodyAngle -= playerStats.handling;
+            }
+            if (turnRight) {
+                this.bodyAngle += playerStats.handling;
+            }
+
+            if (GAME.controlMode === 'SUBSPACE') {
+                this.turretAngle = this.bodyAngle;
+            } else {
+                const mouse = InputManager.getMouse();
+                const mouseAngle = Math.atan2(mouse.y - GAME.height / 2, mouse.x - GAME.width / 2);
+                this.turretAngle = mouseAngle;
+            }
+
+            let thrust = 0;
+            let moveForward = InputManager.isPressed('KeyW') || InputManager.isPressed('ArrowUp');
+
+            // ブースト押下時に前進が押されてない場合は、押されているものとみなして前進ベクトルを追加
+            if (this.boostActiveTimer > 0 && !moveForward) {
+                moveForward = true;
+            }
+
+            if (moveForward) thrust += playerStats.moveSpeed;
+
+            // ブースト時の速度と加速度の拡張係数
+            let boostSpeedMult = 1.0;
+            let boostAccelMult = 1.0;
+
+            if (this.boostActiveTimer > 0) {
+                boostSpeedMult = 3.0;
+                if (this.boostActiveTimer <= 12) {
+                    boostAccelMult = 20.0; // 発動直後0.2秒は加速度20倍
+                } else {
+                    boostAccelMult = 10.0; // その後は加速度10倍
+                }
+            }
+
+            const currentMaxSpeed = playerStats.maxSpeed * boostSpeedMult;
+
+            if (thrust !== 0) {
+                // 現在の機体の向き（bodyAngle）へ推力ベクトルを加算（Subspace Continuum風）
+                const accel = thrust * boostAccelMult * 0.12;
+                this.vx += Math.cos(this.bodyAngle) * accel;
+                this.vy += Math.sin(this.bodyAngle) * accel;
+            }
+
+            // 後退（Sキー）時はブレーキおよび微速後退として処理
+            if (InputManager.isPressed('KeyS') || InputManager.isPressed('ArrowDown')) {
+                this.vx *= 0.95; // 強いブレーキ効果
+                this.vy *= 0.95;
+                const reverseAccel = playerStats.moveSpeed * 0.3;
+                this.vx -= Math.cos(this.bodyAngle) * reverseAccel;
+                this.vy -= Math.sin(this.bodyAngle) * reverseAccel;
+            }
+
+            // タクティカル・ブレーキ (Limit Burst: maneuver >= 6)
+            if (InputManager.isPressed('KeyQ') && (playerStats.upgrades.maneuver || 0) >= 6) {
+                this.vx *= 0.7; // 急激な減衰
+                this.vy *= 0.7;
+                // ブレーキ時に火花を散らす
+                if (Math.hypot(this.vx, this.vy) > 1.0 && Math.random() < 0.5) {
+                    entities.particles.push({
+                        x: this.x + (Math.random() - 0.5) * 20,
+                        y: this.y + (Math.random() - 0.5) * 20,
+                        vx: (Math.random() - 0.5) * 4,
+                        vy: (Math.random() - 0.5) * 4,
+                        life: 1.0, decay: 0.05, size: 2 + Math.random() * 2, color: '#f80', type: 'SPARK'
+                    });
+                }
+            }
+
+            // 物理演算（摩擦→速度クランプ→座標更新）を基底クラスに委譲
+            super.updatePhysics(currentMaxSpeed);
+        } else if (GAME.launchSequence) {
+            // 発進カウントダウン中（GO! のみ移動する）
+            this.x += this.vx;
+            this.y += this.vy;
+        } else if (this.isLandingSequence) {
+            const cat = getCatapultSpec();
+            const targetDown = Math.PI / 2;  // +Y方向（先端→根本）
+            const targetUp = -Math.PI / 2;   // -Y方向（発進方向）
+            const approachSpeed = 0.08;
+            const towSpeed = 0.025;
+            const rotateSpeed = 0.04;
+
+            this.vx = 0;
+            this.vy = 0;
+
+            if (this.landingPhase === 'TIP_LAND') {
+                this.x += (cat.tipX - this.x) * approachSpeed;
+                this.y += (cat.tipY - this.y) * approachSpeed;
+                this.bodyAngle = rotateTowards(this.bodyAngle, targetDown, 0.08);
+                this.turretAngle = this.bodyAngle;
+
+                if (Math.abs(this.x - cat.tipX) < 0.6 && Math.abs(this.y - cat.tipY) < 0.6 && Math.abs(normalizeAngle(this.bodyAngle - targetDown)) < 0.04) {
+                    this.x = cat.tipX;
+                    this.y = cat.tipY;
+                    this.bodyAngle = targetDown;
+                    this.turretAngle = targetDown;
+                    this.leftTrailHistory = [];
+                    this.rightTrailHistory = [];
+                    if (this.landingForClear) {
+                        comm.play("カタパルトロック。格納フェーズ移行。");
+                    } else {
+                        comm.play("着艦シーケンス開始します");
+                    }
+                    this.landingPhase = 'TOW_TO_ROOT';
+                }
+            } else if (this.landingPhase === 'TOW_TO_ROOT') {
+                this.x += (cat.rootX - this.x) * towSpeed;
+                this.y += (cat.rootY - this.y) * towSpeed;
+                this.bodyAngle = targetDown;
+                this.turretAngle = targetDown;
+
+                if (Math.abs(this.x - cat.rootX) < 0.6 && Math.abs(this.y - cat.rootY) < 0.6) {
+                    this.x = cat.rootX;
+                    this.y = cat.rootY;
+                    this.landingPhase = 'ROTATE_UP';
+                }
+            } else if (this.landingPhase === 'ROTATE_UP') {
+                this.x = cat.rootX;
+                this.y = cat.rootY;
+                this.bodyAngle = rotateTowards(this.bodyAngle, targetUp, rotateSpeed);
+                this.turretAngle = rotateTowards(this.turretAngle, targetUp, rotateSpeed);
+
+                if (Math.abs(normalizeAngle(this.bodyAngle - targetUp)) < 0.04 && Math.abs(normalizeAngle(this.turretAngle - targetUp)) < 0.04) {
+                    this.bodyAngle = targetUp;
+                    this.turretAngle = targetUp;
+                    if (this.landingForClear) {
+                        comm.play("おかえりなさい。お疲れ様でした！");
+                        this.landingPhase = 'WAIT_CLEAR';
+                        this.landingTimer = 180;
+                    } else {
+                        // 補給着艦：HPが最大か否かでメッセージ分岐
+                        if (playerStats.hp >= playerStats.maxHp) {
+                            comm.play("あれ？何しに戻ってきたんですか？");
+                            this.needsResupplyVisual = false;
+                            this.landingTimer = 60; // 1秒で追い出し
+                        } else {
+                            comm.play("お疲れ様です。補給は任せてください");
+                            playerStats.hp = playerStats.maxHp;
+                            this.needsResupplyVisual = true;
+                            this.landingTimer = 120; // 修理があるときは2秒
+                        }
+                        this.landingPhase = 'RESUPPLY';
+                    }
+                }
+            } else if (this.landingPhase === 'RESUPPLY') {
+                this.x = cat.rootX;
+                this.y = cat.rootY;
+                this.bodyAngle = targetUp;
+                this.turretAngle = targetUp;
+                this.landingTimer--;
+                if (this.landingTimer <= 0) {
+                    if ((playerStats.levelUpStock || 0) > 0) {
+                        // 補給完了後、ストックがあれば全画面レベルアップへ移行
+                        playerStats.levelUpStock--;
+                        comm.play("溜まったエネルギーを機体に適応させます！");
+
+                        GAME.levelUpCards = [];
+                        let available = [...upgradePool].filter(u => {
+                            const currentLvl = playerStats.upgrades[u.id] || 0;
+                            return currentLvl < u.maxLevel;
+                        });
+                        for (let i = 0; i < 3 && available.length > 0; i++) {
+                            const idx = Math.floor(Math.random() * available.length);
+                            GAME.levelUpCards.push(available.splice(idx, 1)[0]);
+                        }
+
+                        GAME.state = 'LEVEL_UP';
+                        GAME.levelUpState = 'CHOOSING';
+                        GAME.levelUpSelectedIndex = 0;
+                        GAME.levelUpCursorX = (GAME.width - (260 * 3 + 40 * 2)) / 2 + 130;
+                        GAME.levelUpDecidedIndex = -1;
+                        GAME.levelUpDecidedTimer = 0;
+                        GAME.levelUpCursorHoverTimer = 0;
+                        GAME.levelUpNonSelectedY = 0;
+                    } else {
+                        // 補給完了＆ストックなし→再発艦カウントダウン開始
+                        this.isLandingSequence = false;
+                        this.landingPhase = 'NONE';
+                        this.vx = 0;
+                        this.vy = 0;
+                        GAME.launchSequence = true;
+                        GAME.launchTimer = 0;
+                    }
+                }
+            } else if (this.landingPhase === 'WAIT_CLEAR') {
+                this.x = cat.rootX;
+                this.y = cat.rootY;
+                this.bodyAngle = targetUp;
+                this.turretAngle = targetUp;
+                this.landingTimer--;
+                if (this.landingTimer <= 0 && !GAME.isResultTriggered) {
+                    SceneManager.result.init(true);
+                }
+            }
+        }
+
+        // 最も近い敵を探索（自動エイム用）
+        let nearestEnemy = null;
+        let minDist = Infinity;
+        for (let e of entities.enemies) {
+            let d = Math.hypot(e.x - this.x, e.y - this.y);
+            if (d < minDist) {
+                minDist = d;
+                nearestEnemy = e;
+            }
+        }
+
+        // (Old particle emitter removed - now handled fully by ribbon trail)
+
+        // --- ヒートゲージ＆自動エイム射撃ロジック ---
+        // ヒート管理のため、射撃は「右クリック or スペースキー」を押している間のみ作動（死亡・着艦演出時は撃てない）
+        const mouse = InputManager.getMouse();
+        const isFiringInput = !GAME.isPlayerDying && !this.isLandingSequence && (InputManager.isPressed('Space') || mouse.rightDown);
+
+        if (this.isOverheated) {
+            this.overheatTimer--;
+            playerStats.heat -= (CONFIG.HEAT_MAX / CONFIG.HEAT_OVERHEAT_PENALTY); // ペナルティ時間で0まで冷却
+            if (this.overheatTimer <= 0) {
+                playerStats.heat = 0;
+                this.isOverheated = false;
+            }
+        } else {
+            if (!isFiringInput) {
+                // 射撃していない時は自然冷却
+                playerStats.heat = Math.max(0, playerStats.heat - CONFIG.HEAT_COOL_RATE);
+            }
+        }
+
+        if (isFiringInput && !this.isOverheated) {
+            this.fireTimer++;
+            if (this.fireTimer >= playerStats.fireRate) {
+                this.fireTimer = 0;
+                if ((playerStats.upgrades.fireRate || 0) < 6) {
+                    playerStats.heat += CONFIG.HEAT_PER_SHOT;
+                }
+
+                if (playerStats.heat >= CONFIG.HEAT_MAX) {
+                    playerStats.heat = CONFIG.HEAT_MAX;
+                    this.isOverheated = true;
+                    this.overheatTimer = CONFIG.HEAT_OVERHEAT_PENALTY;
+                }
+
+                const fireAngle = GAME.controlMode === 'SUBSPACE' ? this.bodyAngle : this.turretAngle;
+                for (let i = 0; i < playerStats.bulletCount; i++) {
+                    const spread = (i - (playerStats.bulletCount - 1) / 2) * CONFIG.BULLET_SPREAD_ANGLE;
+                    entities.bullets.push({
+                        x: this.x + Math.cos(fireAngle) * (CONFIG.PLAYER_SIZE_W / 2),
+                        y: this.y + Math.sin(fireAngle) * (CONFIG.PLAYER_SIZE_W / 2),
+                        vx: Math.cos(fireAngle + spread) * CONFIG.BULLET_SPEED + this.vx * 0.5,
+                        vy: Math.sin(fireAngle + spread) * CONFIG.BULLET_SPEED + this.vy * 0.5,
+                        life: CONFIG.BULLET_LIFE
+                    });
+                }
+            }
+        } else if (!isFiringInput) {
+            // 撃っていない間は次弾が即座に出るようにタイマーをリセットしておく
+            this.fireTimer = playerStats.fireRate;
+        }
+
+        // --- ミサイル発射 (E) ---
+        if (!GAME.isPlayerDying && !this.isLandingSequence && (!GAME.commState || GAME.commState === 'INACTIVE') && InputManager.isPressed('KeyE') && this.missileCooldown <= 0 && !this.isOverheated) {
+            this.missileCooldown = CONFIG.MISSILE_COOLDOWN;
+
+            // ロックオン処理 (前方90度)
+            let target = null;
+            let minDistToM = Infinity;
+            const fireAngle = GAME.controlMode === 'SUBSPACE' ? this.bodyAngle : this.turretAngle;
+            entities.enemies.forEach(e => {
+                const dx = e.x - this.x;
+                const dy = e.y - this.y;
+                const dist = Math.hypot(dx, dy);
+                const angleToEnemy = Math.atan2(dy, dx);
+                // 角度差を計算
+                let diff = normalizeAngle(angleToEnemy - fireAngle);
+                diff = Math.abs(diff);
+
+                if (diff < Math.PI / 4 && dist < 1200) {
+                    if (dist < minDistToM) {
+                        minDistToM = dist;
+                        target = e;
+                    }
+                }
+            });
+
+            const missileCount = playerStats.missileCount || 1;
+            const spreadAngle = 0.2; // ミサイル同士の広がり角（ラジアン）
+            const startOffset = -((missileCount - 1) * spreadAngle) / 2;
+
+            const dmgMult = playerStats.missileDamageMult || 1.0;
+            const speedMult = playerStats.missileSpeedMult || 1.0;
+            const addRange = playerStats.missileAddRange || 0;
+            const finalSpeed = CONFIG.MISSILE_SPEED * speedMult;
+            const finalLife = Math.floor((1590 + addRange) / finalSpeed);
+
+            for (let i = 0; i < missileCount; i++) {
+                const currentAngle = fireAngle + startOffset + (i * spreadAngle);
+                entities.missiles.push({
+                    x: this.x,
+                    y: this.y,
+                    vx: this.vx + Math.cos(currentAngle) * 5,
+                    vy: this.vy + Math.sin(currentAngle) * 5,
+                    angle: currentAngle,
+                    target: target,
+                    life: finalLife,
+                    speed: finalSpeed,
+                    turnRate: CONFIG.MISSILE_TURN_RATE,
+                    damageMult: dmgMult
+                });
+            }
+            comm.play("ミサイル、いってらっしゃーい！");
+        }
+        if (this.missileCooldown > 0) this.missileCooldown--;
+    }
 }
 
 /**
@@ -507,431 +924,13 @@ function update() {
         }
     }
 
-    // 加速度（ACC）計算のため、現在の速度を前のフレームの速度として保存
-    player.prevVx = player.vx;
-    player.prevVy = player.vy;
-
-    // --- Launch Sequence Countdown Update ---
-    if (GAME.launchSequence) {
-        GAME.launchTimer = (GAME.launchTimer || 0) + 1;
-
-        if (GAME.launchTimer === 1) {
-            comm.play("カタパルト接続完了！出撃システム起動！");
-        }
-
-        if (GAME.launchTimer > 240) {
-            // Launch sequence complete!
-            GAME.launchSequence = false;
-        } else if (GAME.launchTimer > 180) {
-            // GO! boost behavior:
-            player.vx = 0;
-            player.vy = -12; // Out of dock boost!
-            player.bodyAngle = -Math.PI / 2;
-            player.turretAngle = -Math.PI / 2;
-        }
-    }
+    // プレイヤー更新（操作入力・物理演算・射撃・ミサイル）
+    player.update(GAME, entities);
 
     // HUD and credits visibility sync
     document.getElementById('credits-panel').style.display = GAME.launchSequence ? 'none' : 'block';
     document.getElementById('stats-panel').style.display = GAME.launchSequence ? 'none' : 'block';
     document.getElementById('cielo-comm').style.display = 'block';
-
-    // --- Phase 2: 物理と操作 (Drift Physics) ---
-    const canControl = !GAME.isPlayerDying && !player.isLandingSequence && !GAME.launchSequence;
-    if (canControl) {
-        //playerStats.handling = CONFIG.PLAYER_BASE_HANDLING + (playerStats.upgrades.handling - 1) * 0.015;
-        playerStats.handling = CONFIG.PLAYER_BASE_HANDLING + (playerStats.upgrades.maneuver || 0) * 0.015;
-
-    }
-
-    // --- ブーストゲージ (SHIFT) ---
-    if (!GAME.isPlayerDying && !player.isLandingSequence) {
-        if (playerStats.autoRepairCooldown > 0) {
-            playerStats.autoRepairCooldown--;
-        }
-
-        const boosterLv = playerStats.upgrades.booster || 0;
-        const maxBoostGauge = 80 + (boosterLv * 20); // 増量
-        const baseCooldown = 360 - (boosterLv * 30); // 使い切り時CD
-        const cancelCooldown = 180 - (boosterLv * 15); // 途中解除時CD
-
-        if (player.boostGauge === undefined) {
-            player.boostGauge = maxBoostGauge;
-            player.boostActiveTimer = 0;
-            player.boostCooldownTimer = 0;
-        }
-        if (player.boostGauge > maxBoostGauge) {
-            player.boostGauge = maxBoostGauge;
-        }
-
-        const isHoldingShift = (InputManager.isPressed('ShiftLeft') || InputManager.isPressed('ShiftRight')) && !player.isOverheated;
-        const canBoost = player.boostGauge > 0 && player.boostCooldownTimer <= 0;
-        const isBoosting = isHoldingShift && canBoost;
-
-        if (isBoosting) {
-            if (player.boostActiveTimer === 0) {
-                playerStats.heat = Math.min(CONFIG.HEAT_MAX, playerStats.heat + 20); // 使用直後に+20
-                comm.play("ブースト全開ですね！");
-            } else if (player.boostActiveTimer % 5 === 0) {
-                playerStats.heat = Math.min(CONFIG.HEAT_MAX, playerStats.heat + 1); // 以後+1/5F
-            }
-
-            player.boostGauge--;
-            player.boostActiveTimer++;
-
-            if (player.boostGauge <= 0) {
-                // 使い続けた場合のクールダウン
-                player.boostCooldownTimer = baseCooldown;
-                player.boostActiveTimer = 0;
-            }
-        } else {
-            if (player.boostActiveTimer > 0) {
-                // 途中で離した場合のクールダウン
-                player.boostCooldownTimer = cancelCooldown;
-                player.boostActiveTimer = 0;
-            }
-
-            if (player.boostCooldownTimer > 0) {
-                player.boostCooldownTimer--;
-            } else if (player.boostGauge < maxBoostGauge) {
-                // クールダウン終了後に回復 (1/F)
-                player.boostGauge++;
-            }
-        }
-    }
-
-    if (canControl) {
-        const turnLeft = InputManager.isPressed('KeyA') || InputManager.isPressed('ArrowLeft');
-        const turnRight = InputManager.isPressed('KeyD') || InputManager.isPressed('ArrowRight');
-        const hasManualTurn = turnLeft || turnRight;
-
-        if (turnLeft) {
-            player.bodyAngle -= playerStats.handling;
-        }
-        if (turnRight) {
-            player.bodyAngle += playerStats.handling;
-        }
-
-        if (GAME.controlMode === 'SUBSPACE') {
-            player.turretAngle = player.bodyAngle;
-        } else {
-            const mouse = InputManager.getMouse();
-            const mouseAngle = Math.atan2(mouse.y - GAME.height / 2, mouse.x - GAME.width / 2);
-            player.turretAngle = mouseAngle;
-        }
-
-        let thrust = 0;
-        let moveForward = InputManager.isPressed('KeyW') || InputManager.isPressed('ArrowUp');
-
-        // ブースト押下時に前進が押されてない場合は、押されているものとみなして前進ベクトルを追加
-        if (player.boostActiveTimer > 0 && !moveForward) {
-            moveForward = true;
-        }
-
-        if (moveForward) thrust += playerStats.moveSpeed;
-
-        // ブースト時の速度と加速度の拡張係数
-        let boostSpeedMult = 1.0;
-        let boostAccelMult = 1.0;
-
-        if (player.boostActiveTimer > 0) {
-            boostSpeedMult = 3.0;
-            if (player.boostActiveTimer <= 12) {
-                boostAccelMult = 20.0; // 発動直後0.2秒は加速度20倍
-            } else {
-                boostAccelMult = 10.0; // その後は加速度10倍
-            }
-        }
-
-        const currentMaxSpeed = playerStats.maxSpeed * boostSpeedMult;
-
-        if (thrust !== 0) {
-            // 現在の機体の向き（bodyAngle）へ推力ベクトルを加算（Subspace Continuum風）
-            const accel = thrust * boostAccelMult * 0.12;
-            player.vx += Math.cos(player.bodyAngle) * accel;
-            player.vy += Math.sin(player.bodyAngle) * accel;
-        }
-
-        // 後退（Sキー）時はブレーキおよび微速後退として処理
-        if (InputManager.isPressed('KeyS') || InputManager.isPressed('ArrowDown')) {
-            player.vx *= 0.95; // 強いブレーキ効果
-            player.vy *= 0.95;
-            const reverseAccel = playerStats.moveSpeed * 0.3;
-            player.vx -= Math.cos(player.bodyAngle) * reverseAccel;
-            player.vy -= Math.sin(player.bodyAngle) * reverseAccel;
-        }
-
-        // タクティカル・ブレーキ (Limit Burst: maneuver >= 6)
-        if (InputManager.isPressed('KeyQ') && (playerStats.upgrades.maneuver || 0) >= 6) {
-            player.vx *= 0.7; // 急激な減衰
-            player.vy *= 0.7;
-            // ブレーキ時に火花を散らす
-            if (Math.hypot(player.vx, player.vy) > 1.0 && Math.random() < 0.5) {
-                entities.particles.push({
-                    x: player.x + (Math.random() - 0.5) * 20,
-                    y: player.y + (Math.random() - 0.5) * 20,
-                    vx: (Math.random() - 0.5) * 4,
-                    vy: (Math.random() - 0.5) * 4,
-                    life: 1.0, decay: 0.05, size: 2 + Math.random() * 2, color: '#f80', type: 'SPARK'
-                });
-            }
-        }
-
-        // Friction (摩擦係数) - 氷を滑るような感覚を維持
-        player.vx *= CONFIG.FRICTION;
-        player.vy *= CONFIG.FRICTION;
-
-        // Math.hypot を用いた速度クランプ（最高速度の超過を防ぐ）
-        const speed = Math.hypot(player.vx, player.vy);
-        if (speed > currentMaxSpeed) {
-            player.vx = (player.vx / speed) * currentMaxSpeed;
-            player.vy = (player.vy / speed) * currentMaxSpeed;
-        }
-
-        player.x += player.vx;
-        player.y += player.vy;
-    } else if (GAME.launchSequence) {
-        // 発進カウントダウン中（GO! のみ移動する）
-        player.x += player.vx;
-        player.y += player.vy;
-    } else if (player.isLandingSequence) {
-        const cat = getCatapultSpec();
-        const targetDown = Math.PI / 2;  // +Y方向（先端→根本）
-        const targetUp = -Math.PI / 2;   // -Y方向（発進方向）
-        const approachSpeed = 0.08;
-        const towSpeed = 0.025;
-        const rotateSpeed = 0.04;
-
-        player.vx = 0;
-        player.vy = 0;
-
-        if (player.landingPhase === 'TIP_LAND') {
-            player.x += (cat.tipX - player.x) * approachSpeed;
-            player.y += (cat.tipY - player.y) * approachSpeed;
-            player.bodyAngle = rotateTowards(player.bodyAngle, targetDown, 0.08);
-            player.turretAngle = player.bodyAngle;
-
-            if (Math.abs(player.x - cat.tipX) < 0.6 && Math.abs(player.y - cat.tipY) < 0.6 && Math.abs(normalizeAngle(player.bodyAngle - targetDown)) < 0.04) {
-                player.x = cat.tipX;
-                player.y = cat.tipY;
-                player.bodyAngle = targetDown;
-                player.turretAngle = targetDown;
-                player.leftTrailHistory = [];
-                player.rightTrailHistory = [];
-                if (player.landingForClear) {
-                    comm.play("カタパルトロック。格納フェーズ移行。");
-                } else {
-                    comm.play("着艦シーケンス開始します");
-                }
-                player.landingPhase = 'TOW_TO_ROOT';
-            }
-        } else if (player.landingPhase === 'TOW_TO_ROOT') {
-            player.x += (cat.rootX - player.x) * towSpeed;
-            player.y += (cat.rootY - player.y) * towSpeed;
-            player.bodyAngle = targetDown;
-            player.turretAngle = targetDown;
-
-            if (Math.abs(player.x - cat.rootX) < 0.6 && Math.abs(player.y - cat.rootY) < 0.6) {
-                player.x = cat.rootX;
-                player.y = cat.rootY;
-                player.landingPhase = 'ROTATE_UP';
-            }
-        } else if (player.landingPhase === 'ROTATE_UP') {
-            player.x = cat.rootX;
-            player.y = cat.rootY;
-            player.bodyAngle = rotateTowards(player.bodyAngle, targetUp, rotateSpeed);
-            player.turretAngle = rotateTowards(player.turretAngle, targetUp, rotateSpeed);
-
-            if (Math.abs(normalizeAngle(player.bodyAngle - targetUp)) < 0.04 && Math.abs(normalizeAngle(player.turretAngle - targetUp)) < 0.04) {
-                player.bodyAngle = targetUp;
-                player.turretAngle = targetUp;
-                if (player.landingForClear) {
-                    comm.play("おかえりなさい。お疲れ様でした！");
-                    player.landingPhase = 'WAIT_CLEAR';
-                    player.landingTimer = 180;
-                } else {
-                    // 補給着艦：HPが最大か否かでメッセージ分岐
-                    if (playerStats.hp >= playerStats.maxHp) {
-                        comm.play("あれ？何しに戻ってきたんですか？");
-                        player.needsResupplyVisual = false;
-                        player.landingTimer = 60; // 1秒で追い出し
-                    } else {
-                        comm.play("お疲れ様です。補給は任せてください");
-                        playerStats.hp = playerStats.maxHp;
-                        player.needsResupplyVisual = true;
-                        player.landingTimer = 120; // 修理があるときは2秒
-                    }
-                    player.landingPhase = 'RESUPPLY';
-                }
-            }
-        } else if (player.landingPhase === 'RESUPPLY') {
-            player.x = cat.rootX;
-            player.y = cat.rootY;
-            player.bodyAngle = targetUp;
-            player.turretAngle = targetUp;
-            player.landingTimer--;
-            if (player.landingTimer <= 0) {
-                if ((playerStats.levelUpStock || 0) > 0) {
-                    // 補給完了後、ストックがあれば全画面レベルアップへ移行
-                    playerStats.levelUpStock--;
-                    comm.play("溜まったエネルギーを機体に適応させます！");
-
-                    GAME.levelUpCards = [];
-                    let available = [...upgradePool].filter(u => {
-                        const currentLvl = playerStats.upgrades[u.id] || 0;
-                        return currentLvl < u.maxLevel;
-                    });
-                    for (let i = 0; i < 3 && available.length > 0; i++) {
-                        const idx = Math.floor(Math.random() * available.length);
-                        GAME.levelUpCards.push(available.splice(idx, 1)[0]);
-                    }
-
-                    GAME.state = 'LEVEL_UP';
-                    GAME.levelUpState = 'CHOOSING';
-                    GAME.levelUpSelectedIndex = 0;
-                    GAME.levelUpCursorX = (GAME.width - (260 * 3 + 40 * 2)) / 2 + 130;
-                    GAME.levelUpDecidedIndex = -1;
-                    GAME.levelUpDecidedTimer = 0;
-                    GAME.levelUpCursorHoverTimer = 0;
-                    GAME.levelUpNonSelectedY = 0;
-                } else {
-                    // 補給完了＆ストックなし→再発艦カウントダウン開始
-                    player.isLandingSequence = false;
-                    player.landingPhase = 'NONE';
-                    player.vx = 0;
-                    player.vy = 0;
-                    GAME.launchSequence = true;
-                    GAME.launchTimer = 0;
-                }
-            }
-        } else if (player.landingPhase === 'WAIT_CLEAR') {
-            player.x = cat.rootX;
-            player.y = cat.rootY;
-            player.bodyAngle = targetUp;
-            player.turretAngle = targetUp;
-            player.landingTimer--;
-            if (player.landingTimer <= 0 && !GAME.isResultTriggered) {
-                SceneManager.result.init(true);
-            }
-        }
-    }
-
-    // 最も近い敵を探索（自動エイム用）
-    let nearestEnemy = null;
-    let minDist = Infinity;
-    for (let e of entities.enemies) {
-        let d = Math.hypot(e.x - player.x, e.y - player.y);
-        if (d < minDist) {
-            minDist = d;
-            nearestEnemy = e;
-        }
-    }
-
-    // (Old particle emitter removed - now handled fully by ribbon trail)
-
-    // --- ヒートゲージ＆自動エイム射撃ロジック ---
-    // ヒート管理のため、射撃は「右クリック or スペースキー」を押している間のみ作動（死亡・着艦演出時は撃てない）
-    const mouse = InputManager.getMouse();
-    const isFiringInput = !GAME.isPlayerDying && !player.isLandingSequence && (InputManager.isPressed('Space') || mouse.rightDown);
-
-    if (player.isOverheated) {
-        player.overheatTimer--;
-        playerStats.heat -= (CONFIG.HEAT_MAX / CONFIG.HEAT_OVERHEAT_PENALTY); // ペナルティ時間で0まで冷却
-        if (player.overheatTimer <= 0) {
-            playerStats.heat = 0;
-            player.isOverheated = false;
-        }
-    } else {
-        if (!isFiringInput) {
-            // 射撃していない時は自然冷却
-            playerStats.heat = Math.max(0, playerStats.heat - CONFIG.HEAT_COOL_RATE);
-        }
-    }
-
-    if (isFiringInput && !player.isOverheated) {
-        player.fireTimer++;
-        if (player.fireTimer >= playerStats.fireRate) {
-            player.fireTimer = 0;
-            if ((playerStats.upgrades.fireRate || 0) < 6) {
-                playerStats.heat += CONFIG.HEAT_PER_SHOT;
-            }
-
-            if (playerStats.heat >= CONFIG.HEAT_MAX) {
-                playerStats.heat = CONFIG.HEAT_MAX;
-                player.isOverheated = true;
-                player.overheatTimer = CONFIG.HEAT_OVERHEAT_PENALTY;
-            }
-
-            const fireAngle = GAME.controlMode === 'SUBSPACE' ? player.bodyAngle : player.turretAngle;
-            for (let i = 0; i < playerStats.bulletCount; i++) {
-                const spread = (i - (playerStats.bulletCount - 1) / 2) * CONFIG.BULLET_SPREAD_ANGLE;
-                entities.bullets.push({
-                    x: player.x + Math.cos(fireAngle) * (CONFIG.PLAYER_SIZE_W / 2),
-                    y: player.y + Math.sin(fireAngle) * (CONFIG.PLAYER_SIZE_W / 2),
-                    vx: Math.cos(fireAngle + spread) * CONFIG.BULLET_SPEED + player.vx * 0.5,
-                    vy: Math.sin(fireAngle + spread) * CONFIG.BULLET_SPEED + player.vy * 0.5,
-                    life: CONFIG.BULLET_LIFE
-                });
-            }
-        }
-    } else if (!isFiringInput) {
-        // 撃っていない間は次弾が即座に出るようにタイマーをリセットしておく
-        player.fireTimer = playerStats.fireRate;
-    }
-
-    // --- ミサイル発射 (E) ---
-    if (!GAME.isPlayerDying && !player.isLandingSequence && (!GAME.commState || GAME.commState === 'INACTIVE') && InputManager.isPressed('KeyE') && player.missileCooldown <= 0 && !player.isOverheated) {
-        player.missileCooldown = CONFIG.MISSILE_COOLDOWN;
-
-        // ロックオン処理 (前方90度)
-        let target = null;
-        let minDistToM = Infinity;
-        const fireAngle = GAME.controlMode === 'SUBSPACE' ? player.bodyAngle : player.turretAngle;
-        entities.enemies.forEach(e => {
-            const dx = e.x - player.x;
-            const dy = e.y - player.y;
-            const dist = Math.hypot(dx, dy);
-            const angleToEnemy = Math.atan2(dy, dx);
-            // 角度差を計算
-            let diff = normalizeAngle(angleToEnemy - fireAngle);
-            diff = Math.abs(diff);
-
-            if (diff < Math.PI / 4 && dist < 1200) {
-                if (dist < minDistToM) {
-                    minDistToM = dist;
-                    target = e;
-                }
-            }
-        });
-
-        const missileCount = playerStats.missileCount || 1;
-        const spreadAngle = 0.2; // ミサイル同士の広がり角（ラジアン）
-        const startOffset = -((missileCount - 1) * spreadAngle) / 2;
-
-        const dmgMult = playerStats.missileDamageMult || 1.0;
-        const speedMult = playerStats.missileSpeedMult || 1.0;
-        const addRange = playerStats.missileAddRange || 0;
-        const finalSpeed = CONFIG.MISSILE_SPEED * speedMult;
-        const finalLife = Math.floor((1590 + addRange) / finalSpeed);
-
-        for (let i = 0; i < missileCount; i++) {
-            const currentAngle = fireAngle + startOffset + (i * spreadAngle);
-            entities.missiles.push({
-                x: player.x,
-                y: player.y,
-                vx: player.vx + Math.cos(currentAngle) * 5,
-                vy: player.vy + Math.sin(currentAngle) * 5,
-                angle: currentAngle,
-                target: target,
-                life: finalLife,
-                speed: finalSpeed,
-                turnRate: CONFIG.MISSILE_TURN_RATE,
-                damageMult: dmgMult
-            });
-        }
-        comm.play("ミサイル、いってらっしゃーい！");
-    }
-    if (player.missileCooldown > 0) player.missileCooldown--;
 
     // --- Phase 3: 多重スクロール背景座標更新 ---
     if (!GAME.isPlayerDying && GAME.state === 'PLAYING') {
