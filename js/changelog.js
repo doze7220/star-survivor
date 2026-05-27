@@ -1,5 +1,15 @@
 const changelog = [
   {
+    version: "v0.5.29",
+    date: "2026-05-27",
+    description: "Refactoring: Phase 3 Step 1 - Ship 基底クラスに updatePhysics() / takeDamage() を追加。",
+    details: [
+      "【リファクタリング】Ship クラスに updatePhysics(maxSpeed) を追加。処理順序（摩擦 → 速度クランプ → 座標更新）は main.js 既存実装と完全一致",
+      "【リファクタリング】Ship クラスに takeDamage(amount) を追加（HP 減少 + flashTimer 設定）",
+      "【変更なし】PlayerShip / EnemyShip / main.js update() / 描画系 / 衝突判定は一切変更なし"
+    ]
+  },
+  {
     version: "v0.5.28",
     date: "2026-05-25",
     description: "Feature: Updated HUD stats panel and implemented Booster System logic.",

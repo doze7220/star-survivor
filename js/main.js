@@ -218,6 +218,39 @@ class Ship {
         // 軌跡履歴
         this.trailHistory = [];
     }
+
+    /**
+     * 共通物理演算。
+     * 呼び出し前に推力・反動等の vx/vy への加算を済ませておくこと。
+     * 処理順序は main.js に存在する順序を完全維持する:
+     *   摩擦適用 → 速度クランプ → 座標更新
+     * @param {number} maxSpeed - このフレームの最高速度上限
+     */
+    updatePhysics(maxSpeed) {
+        // 摩擦（FRICTION）
+        this.vx *= CONFIG.FRICTION;
+        this.vy *= CONFIG.FRICTION;
+
+        // 速度クランプ（最高速度の超過を防ぐ）
+        const speed = Math.hypot(this.vx, this.vy);
+        if (speed > maxSpeed) {
+            this.vx = (this.vx / speed) * maxSpeed;
+            this.vy = (this.vy / speed) * maxSpeed;
+        }
+
+        // 座標更新
+        this.x += this.vx;
+        this.y += this.vy;
+    }
+
+    /**
+     * ダメージ処理（HP減少 + フラッシュタイマー設定）
+     * @param {number} amount - ダメージ量
+     */
+    takeDamage(amount) {
+        this.hp -= amount;
+        this.flashTimer = CONFIG.FLASH_DURATION;
+    }
 }
 
 /**
