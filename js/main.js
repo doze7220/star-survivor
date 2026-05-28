@@ -742,6 +742,245 @@ class EnemyShip extends Ship {
         this.isLaunching = isLaunching;
         this.launchTimer = launchTimer;
     }
+
+    /**
+     * 敵機更新: 射出シーケンス → AI行動決定 → 障害物回避 → 物理演算 → エイム → 射撃
+     * 衝突判定・生存チェックは main.js に残す。
+     * 物理演算は super.updatePhysics(maxSpd) に委譲する。
+     * @param {object} player    - プレイヤー（位置・速度の参照）
+     * @param {object} entities  - エンティティ群（enemies / enemyBullets / debris / explosions）
+     * @param {object} GAME      - ゲーム状態（isPlayerDying 等）
+     * @returns {boolean} true = 射出シーケンス中（呼び出し元で continue が必要）
+     */
+    update(player, entities, GAME) {
+        const edx = player.x - this.x;
+        const edy = player.y - this.y;
+        const distToPlayer = Math.hypot(edx, edy);
+
+        // --- 射出シークエンスの処理 ---
+        if (this.isLaunching) {
+            this.launchTimer--;
+            if (this.launchTimer > 30) {
+                // 最初はドック内で待機 (停止状態)
+                this.vx = 0;
+                this.vy = 0;
+                this.angle = Math.PI / 2; // 下向き固定
+            } else if (this.launchTimer > 0) {
+                // カタパルトから射出開始 (下方向へ加速)
+                this.vx = 0;
+                this.vy += 0.5;
+                this.angle = Math.PI / 2;
+                this.x += this.vx;
+                this.y += this.vy;
+            } else {
+                // 射出完了、AIに移行
+                this.isLaunching = false;
+                this.vy = 8; // 初速ボーナス
+            }
+            return true; // 射出中は通常のAIロジックをスキップ
+        }
+
+        // --- 1. 性格別ターゲット座標の設定 ---
+        let targetX = player.x;
+        let targetY = player.y;
+
+        if (this.personality === 'RAMMER') {
+            // とにかくプレイヤーに直行・体当たり
+            targetX = player.x;
+            targetY = player.y;
+        } else if (this.personality === 'SNIPER') {
+            // 一定の遠距離（約350px）を維持する
+            const keepDist = 350;
+            if (distToPlayer < keepDist - 50) {
+                // 近すぎるので離れる方向へ加速
+                targetX = this.x - (edx / distToPlayer) * 200;
+                targetY = this.y - (edy / distToPlayer) * 200;
+            } else if (distToPlayer > keepDist + 50) {
+                // 遠すぎるので近づく
+                targetX = player.x;
+                targetY = player.y;
+            } else {
+                // 距離がちょうどいい時はプレイヤーの周りを周回移動（横滑り）
+                targetX = player.x + (edy / distToPlayer) * keepDist;
+                targetY = player.y - (edx / distToPlayer) * keepDist;
+            }
+        } else if (this.personality === 'DOGFIGHTER') {
+            // すれ違いドッグファイト
+            // ターゲット位置をプレイヤーから一定オフセットさせ、定期的に更新する
+            if (!this.dogfightTimer || this.dogfightTimer <= 0 || distToPlayer < 100) {
+                const offsetAngle = Math.random() * Math.PI * 2;
+                const offsetDist = 120 + Math.random() * 120; // プレイヤーの周囲120〜240px
+                this.offsetX = Math.cos(offsetAngle) * offsetDist;
+                this.offsetY = Math.sin(offsetAngle) * offsetDist;
+                this.dogfightTimer = 100 + Math.floor(Math.random() * 60); // 定期的に次の通過ポイントを設定
+            }
+            this.dogfightTimer--;
+
+            targetX = player.x + this.offsetX;
+            targetY = player.y + this.offsetY;
+        }
+
+        // --- 2. 進行方向の障害物（他の敵・プレイヤー・有害デブリ・爆発）の回避 (Obstacle Avoidance) ---
+        let avoidX = 0;
+        let avoidY = 0;
+        const eSpeed = Math.hypot(this.vx, this.vy);
+
+        const maxSpd = CONFIG.ENEMY_MAX_SPEED * (this.spdMult || 1.0);
+        const avoidAccel = CONFIG.ENEMY_ACCEL * (this.turnMult || 1.0); // 障害物回避時の加速度として利用
+
+        if (eSpeed > 0.2) {
+            const dirX = this.vx / eSpeed;
+            const dirY = this.vy / eSpeed;
+            const lookAheadDist = CONFIG.ENEMY_SIZE_W * 2.8; // 約84px先を予測
+            const predictX = this.x + dirX * lookAheadDist;
+            const predictY = this.y + dirY * lookAheadDist;
+
+            let mostThreatening = null;
+            let minThreatDist = lookAheadDist;
+
+            // プレイヤーを障害物として検知 (自爆型RAMMERはプレイヤーを避けない)
+            if (!GAME.isPlayerDying && this.personality !== 'RAMMER') {
+                const distToPlayer = Math.hypot(player.x - predictX, player.y - predictY);
+                if (distToPlayer < CONFIG.ENEMY_SIZE_W * 1.5) {
+                    mostThreatening = player;
+                    minThreatDist = distToPlayer;
+                }
+            }
+
+            // 他の敵機を障害物として検知
+            entities.enemies.forEach(other => {
+                if (other === this) return;
+                const distToOther = Math.hypot(other.x - predictX, other.y - predictY);
+                if (distToOther < CONFIG.ENEMY_SIZE_W * 1.3) {
+                    if (distToOther < minThreatDist) {
+                        mostThreatening = other;
+                        minThreatDist = distToOther;
+                    }
+                }
+            });
+
+            // 有害デブリを障害物として検知
+            entities.debris.forEach(d => {
+                if (!d.harmful) return; // 無害な被弾火花は避けない
+                const distToDebris = Math.hypot(d.x - predictX, d.y - predictY);
+                if (distToDebris < d.size / 2 + CONFIG.ENEMY_SIZE_W * 1.3) {
+                    if (distToDebris < minThreatDist) {
+                        mostThreatening = d;
+                        minThreatDist = distToDebris;
+                    }
+                }
+            });
+
+            // 爆発を危険オブジェとして検知
+            entities.explosions.forEach(exp => {
+                const distToExplosion = Math.hypot(exp.x - predictX, exp.y - predictY);
+                // 爆発の現在半径を取得（事前にupdate計算済みのcurrentScaleを利用）
+                const currentRadius = exp.maxRadius * (exp.currentScale || 1.0);
+
+                if (distToExplosion < currentRadius + CONFIG.ENEMY_SIZE_W * 1.5) {
+                    // 爆発は他より脅威度が高い（距離を小さく見積もり、優先的に回避させる）
+                    const effectiveDist = distToExplosion * 0.4;
+                    if (effectiveDist < minThreatDist) {
+                        mostThreatening = exp;
+                        minThreatDist = effectiveDist;
+                    }
+                }
+            });
+
+            // 回避ステアリング力の計算
+            if (mostThreatening) {
+                const relX = mostThreatening.x - this.x;
+                const relY = mostThreatening.y - this.y;
+                const crossProduct = dirX * relY - dirY * relX;
+
+                // 左右に避ける直交ベクトルを生成 (外積の符号と逆向きに操舵)
+                const steerSide = crossProduct > 0 ? -1 : 1;
+                const steerX = -dirY * steerSide;
+                const steerY = dirX * steerSide;
+
+                // 障害物に近づくほど強い回避力を適用
+                const avoidForce = (1.0 - minThreatDist / lookAheadDist) * avoidAccel * 2.5;
+                avoidX = steerX * avoidForce;
+                avoidY = steerY * avoidForce;
+            }
+        }
+
+        // --- 3. 移動角度と慣性移動 (サブスペース慣性ドリフト推進) ---
+        const moveAngle = Math.atan2(targetY - this.y, targetX - this.x);
+
+        // 障害物回避（avoidX, avoidY）のステアリング力を加味した理想の進行ベクトルを計算
+        const targetVx = Math.cos(moveAngle) * maxSpd + avoidX;
+        const targetVy = Math.sin(moveAngle) * maxSpd + avoidY;
+
+        // 目標への進行角度
+        const driveAngle = Math.atan2(targetVy, targetVx);
+
+        // 加速度係数
+        const accelForce = CONFIG.ENEMY_ACCEL * (this.spdMult || 1.0);
+
+        // ベクトルへの直接加算による慣性駆動
+        this.vx += Math.cos(driveAngle) * accelForce;
+        this.vy += Math.sin(driveAngle) * accelForce;
+
+        // 物理演算（摩擦→速度クランプ→座標更新）を基底クラスに委譲
+        super.updatePhysics(maxSpd);
+
+        // --- 3. 機体の向き（エイム）と揺らぎの適用 ---
+        // 照準角度に数秒ごとに変わる微小な揺らぎ（aimOffset）を加え、射撃が単一線上に重ならないようにする
+        if (!this.aimOffsetTimer || this.aimOffsetTimer <= 0) {
+            this.aimOffset = (Math.random() - 0.5) * 0.35; // 約±10度以内の揺らぎ
+            this.aimOffsetTimer = 30 + Math.floor(Math.random() * 45);
+        }
+        this.aimOffsetTimer--;
+
+        const targetAimAngle = Math.atan2(edy, edx) + this.aimOffset;
+        const eHandling = CONFIG.ENEMY_HANDLING * (this.turnMult || 1.0);
+        this.angle = rotateTowards(this.angle, targetAimAngle, eHandling);
+
+
+        // --- 4. 射撃処理とヒートゲージ管理（揺らぎを持たせる） ---
+        if (this.isOverheated) {
+            this.overheatTimer--;
+            this.heat -= (CONFIG.HEAT_MAX / CONFIG.HEAT_OVERHEAT_PENALTY);
+            if (this.overheatTimer <= 0) {
+                this.heat = 0;
+                this.isOverheated = false;
+            }
+        } else {
+            // プレイヤーが生きており、かつ射程内にいる場合のみ射撃
+            if (!GAME.isPlayerDying && distToPlayer < 800) {
+                this.fireTimer++;
+                // 揺らいだ射撃間隔(nextShootInterval)に達したか判定
+                if (this.fireTimer >= this.nextShootInterval) {
+                    this.fireTimer = 0;
+                    this.heat += CONFIG.HEAT_PER_SHOT;
+
+                    // 次回の射撃間隔をランダムに揺らす（ENEMY_FIRE_RATEの75%〜125%）
+                    this.nextShootInterval = CONFIG.ENEMY_FIRE_RATE * (0.75 + Math.random() * 0.5);
+
+                    if (this.heat >= CONFIG.HEAT_MAX) {
+                        this.heat = CONFIG.HEAT_MAX;
+                        this.isOverheated = true;
+                        this.overheatTimer = CONFIG.HEAT_OVERHEAT_PENALTY;
+                    }
+
+                    // 敵の弾を発射（照準の揺らぎを反映したthis.angleを使用）
+                    entities.enemyBullets.push({
+                        x: this.x + Math.cos(this.angle) * (CONFIG.ENEMY_SIZE_W / 2),
+                        y: this.y + Math.sin(this.angle) * (CONFIG.ENEMY_SIZE_W / 2),
+                        vx: Math.cos(this.angle) * CONFIG.ENEMY_BULLET_SPEED + this.vx * 0.5,
+                        vy: Math.sin(this.angle) * CONFIG.ENEMY_BULLET_SPEED + this.vy * 0.5,
+                        life: CONFIG.BULLET_LIFE,
+                        damage: CONFIG.ENEMY_BULLET_DAMAGE * (this.attackMult || 1.0)
+                    });
+                }
+            } else {
+                this.heat = Math.max(0, this.heat - CONFIG.HEAT_COOL_RATE);
+            }
+        }
+
+        return false; // 射出シーケンス中ではない
+    }
 }
 
 const player = new PlayerShip();
@@ -1404,243 +1643,7 @@ function update() {
 
     for (let i = entities.enemies.length - 1; i >= 0; i--) {
         let e = entities.enemies[i];
-        const edx = player.x - e.x;
-        const edy = player.y - e.y;
-        const distToPlayer = Math.hypot(edx, edy);
-
-        // --- 射出シークエンスの処理 ---
-        if (e.isLaunching) {
-            e.launchTimer--;
-            if (e.launchTimer > 30) {
-                // 最初はドック内で待機 (停止状態)
-                e.vx = 0;
-                e.vy = 0;
-                e.angle = Math.PI / 2; // 下向き固定
-            } else if (e.launchTimer > 0) {
-                // カタパルトから射出開始 (下方向へ加速)
-                e.vx = 0;
-                e.vy += 0.5;
-                e.angle = Math.PI / 2;
-                e.x += e.vx;
-                e.y += e.vy;
-            } else {
-                // 射出完了、AIに移行
-                e.isLaunching = false;
-                e.vy = 8; // 初速ボーナス
-            }
-            continue; // 射出中は通常のAIロジックをスキップ
-        }
-
-        // --- 1. 性格別ターゲット座標の設定 ---
-        let targetX = player.x;
-        let targetY = player.y;
-
-        if (e.personality === 'RAMMER') {
-            // とにかくプレイヤーに直行・体当たり
-            targetX = player.x;
-            targetY = player.y;
-        } else if (e.personality === 'SNIPER') {
-            // 一定の遠距離（約350px）を維持する
-            const keepDist = 350;
-            if (distToPlayer < keepDist - 50) {
-                // 近すぎるので離れる方向へ加速
-                targetX = e.x - (edx / distToPlayer) * 200;
-                targetY = e.y - (edy / distToPlayer) * 200;
-            } else if (distToPlayer > keepDist + 50) {
-                // 遠すぎるので近づく
-                targetX = player.x;
-                targetY = player.y;
-            } else {
-                // 距離がちょうどいい時はプレイヤーの周りを周回移動（横滑り）
-                targetX = player.x + (edy / distToPlayer) * keepDist;
-                targetY = player.y - (edx / distToPlayer) * keepDist;
-            }
-        } else if (e.personality === 'DOGFIGHTER') {
-            // すれ違いドッグファイト
-            // ターゲット位置をプレイヤーから一定オフセットさせ、定期的に更新する
-            if (!e.dogfightTimer || e.dogfightTimer <= 0 || distToPlayer < 100) {
-                const offsetAngle = Math.random() * Math.PI * 2;
-                const offsetDist = 120 + Math.random() * 120; // プレイヤーの周囲120〜240px
-                e.offsetX = Math.cos(offsetAngle) * offsetDist;
-                e.offsetY = Math.sin(offsetAngle) * offsetDist;
-                e.dogfightTimer = 100 + Math.floor(Math.random() * 60); // 定期的に次の通過ポイントを設定
-            }
-            e.dogfightTimer--;
-
-            targetX = player.x + e.offsetX;
-            targetY = player.y + e.offsetY;
-        }
-
-        // --- 2. 進行方向の障害物（他の敵・プレイヤー・有害デブリ・爆発）の回避 (Obstacle Avoidance) ---
-        let avoidX = 0;
-        let avoidY = 0;
-        const eSpeed = Math.hypot(e.vx, e.vy);
-
-        const maxSpd = CONFIG.ENEMY_MAX_SPEED * (e.spdMult || 1.0);
-        const avoidAccel = CONFIG.ENEMY_ACCEL * (e.turnMult || 1.0); // 障害物回避時の加速度として利用
-
-        if (eSpeed > 0.2) {
-            const dirX = e.vx / eSpeed;
-            const dirY = e.vy / eSpeed;
-            const lookAheadDist = CONFIG.ENEMY_SIZE_W * 2.8; // 約84px先を予測
-            const predictX = e.x + dirX * lookAheadDist;
-            const predictY = e.y + dirY * lookAheadDist;
-
-            let mostThreatening = null;
-            let minThreatDist = lookAheadDist;
-
-            // プレイヤーを障害物として検知 (自爆型RAMMERはプレイヤーを避けない)
-            if (!GAME.isPlayerDying && e.personality !== 'RAMMER') {
-                const distToPlayer = Math.hypot(player.x - predictX, player.y - predictY);
-                if (distToPlayer < CONFIG.ENEMY_SIZE_W * 1.5) {
-                    mostThreatening = player;
-                    minThreatDist = distToPlayer;
-                }
-            }
-
-            // 他の敵機を障害物として検知
-            entities.enemies.forEach(other => {
-                if (other === e) return;
-                const distToOther = Math.hypot(other.x - predictX, other.y - predictY);
-                if (distToOther < CONFIG.ENEMY_SIZE_W * 1.3) {
-                    if (distToOther < minThreatDist) {
-                        mostThreatening = other;
-                        minThreatDist = distToOther;
-                    }
-                }
-            });
-
-            // 有害デブリを障害物として検知
-            entities.debris.forEach(d => {
-                if (!d.harmful) return; // 無害な被弾火花は避けない
-                const distToDebris = Math.hypot(d.x - predictX, d.y - predictY);
-                if (distToDebris < d.size / 2 + CONFIG.ENEMY_SIZE_W * 1.3) {
-                    if (distToDebris < minThreatDist) {
-                        mostThreatening = d;
-                        minThreatDist = distToDebris;
-                    }
-                }
-            });
-
-            // 爆発を危険オブジェとして検知
-            entities.explosions.forEach(exp => {
-                const distToExplosion = Math.hypot(exp.x - predictX, exp.y - predictY);
-                // 爆発の現在半径を取得（事前にupdate計算済みのcurrentScaleを利用）
-                const currentRadius = exp.maxRadius * (exp.currentScale || 1.0);
-
-                if (distToExplosion < currentRadius + CONFIG.ENEMY_SIZE_W * 1.5) {
-                    // 爆発は他より脅威度が高い（距離を小さく見積もり、優先的に回避させる）
-                    const effectiveDist = distToExplosion * 0.4;
-                    if (effectiveDist < minThreatDist) {
-                        mostThreatening = exp;
-                        minThreatDist = effectiveDist;
-                    }
-                }
-            });
-
-            // 回避ステアリング力の計算
-            if (mostThreatening) {
-                const relX = mostThreatening.x - e.x;
-                const relY = mostThreatening.y - e.y;
-                const crossProduct = dirX * relY - dirY * relX;
-
-                // 左右に避ける直交ベクトルを生成 (外積の符号と逆向きに操舵)
-                const steerSide = crossProduct > 0 ? -1 : 1;
-                const steerX = -dirY * steerSide;
-                const steerY = dirX * steerSide;
-
-                // 障害物に近づくほど強い回避力を適用
-                const avoidForce = (1.0 - minThreatDist / lookAheadDist) * avoidAccel * 2.5;
-                avoidX = steerX * avoidForce;
-                avoidY = steerY * avoidForce;
-            }
-        }
-
-        // --- 3. 移動角度と慣性移動 (サブスペース慣性ドリフト推進) ---
-        const moveAngle = Math.atan2(targetY - e.y, targetX - e.x);
-
-        // 障害物回避（avoidX, avoidY）のステアリング力を加味した理想の進行ベクトルを計算
-        const targetVx = Math.cos(moveAngle) * maxSpd + avoidX;
-        const targetVy = Math.sin(moveAngle) * maxSpd + avoidY;
-
-        // 目標への進行角度
-        const driveAngle = Math.atan2(targetVy, targetVx);
-
-        // 加速度係数
-        const accelForce = CONFIG.ENEMY_ACCEL * (e.spdMult || 1.0);
-
-        // ベクトルへの直接加算による慣性駆動
-        e.vx += Math.cos(driveAngle) * accelForce;
-        e.vy += Math.sin(driveAngle) * accelForce;
-
-        // Friction (宇宙空間の自然減衰)
-        e.vx *= CONFIG.FRICTION;
-        e.vy *= CONFIG.FRICTION;
-
-        // 速度クランプ処理
-        const enemySpeed = Math.hypot(e.vx, e.vy);
-        if (enemySpeed > maxSpd) {
-            e.vx = (e.vx / enemySpeed) * maxSpd;
-            e.vy = (e.vy / enemySpeed) * maxSpd;
-        }
-
-        // 座標更新
-        e.x += e.vx;
-        e.y += e.vy;
-
-        // --- 3. 機体の向き（エイム）と揺らぎの適用 ---
-        // 照準角度に数秒ごとに変わる微小な揺らぎ（aimOffset）を加え、射撃が単一線上に重ならないようにする
-        if (!e.aimOffsetTimer || e.aimOffsetTimer <= 0) {
-            e.aimOffset = (Math.random() - 0.5) * 0.35; // 約±10度以内の揺らぎ
-            e.aimOffsetTimer = 30 + Math.floor(Math.random() * 45);
-        }
-        e.aimOffsetTimer--;
-
-        const targetAimAngle = Math.atan2(edy, edx) + e.aimOffset;
-        const eHandling = CONFIG.ENEMY_HANDLING * (e.turnMult || 1.0);
-        e.angle = rotateTowards(e.angle, targetAimAngle, eHandling);
-
-
-        // --- 4. 射撃処理とヒートゲージ管理（揺らぎを持たせる） ---
-        if (e.isOverheated) {
-            e.overheatTimer--;
-            e.heat -= (CONFIG.HEAT_MAX / CONFIG.HEAT_OVERHEAT_PENALTY);
-            if (e.overheatTimer <= 0) {
-                e.heat = 0;
-                e.isOverheated = false;
-            }
-        } else {
-            // プレイヤーが生きており、かつ射程内にいる場合のみ射撃
-            if (!GAME.isPlayerDying && distToPlayer < 800) {
-                e.fireTimer++;
-                // 揺らいだ射撃間隔(nextShootInterval)に達したか判定
-                if (e.fireTimer >= e.nextShootInterval) {
-                    e.fireTimer = 0;
-                    e.heat += CONFIG.HEAT_PER_SHOT;
-
-                    // 次回の射撃間隔をランダムに揺らす（ENEMY_FIRE_RATEの75%〜125%）
-                    e.nextShootInterval = CONFIG.ENEMY_FIRE_RATE * (0.75 + Math.random() * 0.5);
-
-                    if (e.heat >= CONFIG.HEAT_MAX) {
-                        e.heat = CONFIG.HEAT_MAX;
-                        e.isOverheated = true;
-                        e.overheatTimer = CONFIG.HEAT_OVERHEAT_PENALTY;
-                    }
-
-                    // 敵の弾を発射（照準の揺らぎを反映したe.angleを使用）
-                    entities.enemyBullets.push({
-                        x: e.x + Math.cos(e.angle) * (CONFIG.ENEMY_SIZE_W / 2),
-                        y: e.y + Math.sin(e.angle) * (CONFIG.ENEMY_SIZE_W / 2),
-                        vx: Math.cos(e.angle) * CONFIG.ENEMY_BULLET_SPEED + e.vx * 0.5,
-                        vy: Math.sin(e.angle) * CONFIG.ENEMY_BULLET_SPEED + e.vy * 0.5,
-                        life: CONFIG.BULLET_LIFE,
-                        damage: CONFIG.ENEMY_BULLET_DAMAGE * (e.attackMult || 1.0)
-                    });
-                }
-            } else {
-                e.heat = Math.max(0, e.heat - CONFIG.HEAT_COOL_RATE);
-            }
-        }
+        if (e.update(player, entities, GAME)) continue;
 
         if (e.flashTimer > 0) e.flashTimer--;
 

@@ -1,5 +1,17 @@
 const changelog = [
   {
+    version: "v0.5.31",
+    date: "2026-05-28",
+    description: "Refactoring: Phase 3 Step 3 - EnemyShip.update() を実装し敵AIロジックをカプセル化。",
+    details: [
+      "【リファクタリング】EnemyShip.update(player, entities, GAME) を追加。射出シーケンス・性格別AI・障害物回避・エイム揺らぎ・ヒートゲージ・射撃処理を完全移植",
+      "【リファクタリング】物理演算箇所（推力加算→摩擦→速度クランプ→座標更新）を super.updatePhysics(maxSpd) に委譲",
+      "【リファクタリング】main.js の for ループ内 AI ロジックを e.update(player, entities, GAME) の1行に置換。射出シーケンス中は continue で早期スキップ",
+      "【変更なし】衝突判定（弾・体当たり）・生存チェック・flashTimer-- は main.js に残存",
+      "【保証】steering algorithm / personality / target selection / avoidance timing / firing timing / heat処理順 / launch sequence順 / vx/vy計算式は完全維持"
+    ]
+  },
+  {
     version: "v0.5.30",
     date: "2026-05-27",
     description: "Refactoring: Phase 3 Step 2 - PlayerShip.update() を実装し操作ロジックをカプセル化。",
