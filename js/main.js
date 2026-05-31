@@ -1063,21 +1063,12 @@ function spawnExplosion(x, y, isPlayer = false, isFlavor = false, sizeMultiplier
     // 小円は半径が 0.5 なので、最大ズレ量は 0.5
     const offsetSmall = Math.random() * 0.5;
 
-    entities.explosions.push({
-        x: x,
-        y: y,
-        maxRadius: maxRadius,
-        timer: duration,
-        maxTimer: duration,
-        damagedEntities: new Set(), // 重複ダメージ防止用
-        isPlayerExplosion: isPlayer,
-        isFlavor: isFlavor,
-        isMissileFlare: isMissileFlare,
-        damageMultiplier: damageMultiplier,
-        angle: angle,
-        offsetMid: offsetMid,
-        offsetSmall: offsetSmall
-    });
+    entities.explosions.push(new Explosion(
+        x, y, maxRadius, duration, duration,
+        new Set(), // 重複ダメージ防止用
+        isPlayer, isFlavor, isMissileFlare, damageMultiplier,
+        angle, offsetMid, offsetSmall
+    ));
 }
 
 function clearAllEnemiesInstantly() {
@@ -1324,30 +1315,10 @@ function update() {
     // 爆発（爆風）の更新と当たり判定
     for (let i = entities.explosions.length - 1; i >= 0; i--) {
         let exp = entities.explosions[i];
-        exp.timer--;
+        exp.update();
 
         const progress = 1 - (exp.timer / exp.maxTimer);
-
-        // --- アニメ風の爆発推移計算 ---
-        // 最初の10%で急拡大、中間80%は最大サイズを維持して震える、最後の10%で急縮小
-        let scale = 1.0;
-        let isShaking = false;
-        if (progress < 0.1) {
-            scale = Math.sin((progress / 0.1) * (Math.PI / 2)); // Ease-out
-        } else if (progress > 0.9) {
-            scale = Math.sin(((1.0 - progress) / 0.1) * (Math.PI / 2)); // Ease-in
-        } else {
-            isShaking = true;
-            // 維持中は小刻みに震える
-            scale = 1.0 + (Math.random() - 0.5) * 0.15;
-        }
-
-        // 描画用の揺れオフセットもここで計算しておく（描画時に利用する）
-        exp.shakeX = isShaking ? (Math.random() - 0.5) * 10 : 0;
-        exp.shakeY = isShaking ? (Math.random() - 0.5) * 10 : 0;
-        exp.currentScale = scale; // 描画側で使うために保存
-
-        const currentRadius = exp.maxRadius * scale;
+        const currentRadius = exp.currentRadius;
 
         // 爆発ダメージ判定 (最初の膨張フェーズのみダメージ判定を発生させる)
         if (progress > 0.02 && progress < 0.15) {

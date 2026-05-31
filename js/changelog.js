@@ -1,5 +1,18 @@
 const changelog = [
   {
+    version: "v0.5.37",
+    date: "2026-05-31",
+    description: "Refactoring: Phase 4 Step 6 - Explosion クラス化。タイマー・scale/shake計算・currentRadius算出を Explosion.update() に委譲。",
+    details: [
+      "【リファクタリング】js/classes/Explosion.js を新規作成。constructor(x,y,maxRadius,timer,maxTimer,damagedEntities,isPlayerExplosion,isFlavor,isMissileFlare,damageMultiplier,angle,offsetMid,offsetSmall) + update() を実装",
+      "【リファクタリング】update() は timer--; → progress算出 → scale計算（sin ease-out/ease-in + 維持時震え）→ shakeX/shakeY算出 → currentScale/currentRadius保存 のみ（damage/collision/splice は行わない）",
+      "【リファクタリング】spawnExplosion() 内の entities.explosions.push({...}) → new Explosion(...) に変換",
+      "【リファクタリング】main.js 爆発更新ループの timer/scale/shake計算（約20行）→ exp.update() の1行 + progress/currentRadius再取得に置換",
+      "【変更なし】爆発ダメージ判定（対Player / 対Enemy）・cleanup(splice)・ゲームオーバー遷移は main.js 爆発ループ内に残存。drawEffects.js / EffectManager 変更なし",
+      "【保証】explosion timer・scale計算式(sinによるease-out/ease-in)・shake振幅・currentScale/shakeX/shakeYの描画参照・damage判定タイミング(progress 0.02〜0.15)・重複ダメージ防止(damagedEntities Set)・cleanup(timer<=0)・ゲームオーバー遷移(isPlayerExplosion)は変更なし"
+    ]
+  },
+  {
     version: "v0.5.36",
     date: "2026-05-31",
     description: "Refactoring: Phase 4 Step 5 - Debris クラス化。位置更新・寿命減衰を Debris.update() に委譲。",
