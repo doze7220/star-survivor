@@ -81,17 +81,17 @@ class Missile {
 
         // 6. 噴煙（スモーク）パーティクル生成
         if (Math.random() < 0.6) {
-            entities.particles.push({
-                x: this.x - Math.cos(this.angle) * 8, // ミサイル後方から
-                y: this.y - Math.sin(this.angle) * 8,
-                vx: this.vx * 0.1 + (Math.random() - 0.5) * 0.5,
-                vy: this.vy * 0.1 + (Math.random() - 0.5) * 0.5,
-                life: 1.0,
-                decay: 0.05,
-                size: 3 + Math.random() * 3,
-                color: Math.random() < 0.5 ? '#fff' : '#ccc',
-                type: 'SMOKE'
-            });
+            entities.particles.push(new Particle(
+                this.x - Math.cos(this.angle) * 8, // ミサイル後方から
+                this.y - Math.sin(this.angle) * 8,
+                this.vx * 0.1 + (Math.random() - 0.5) * 0.5,
+                this.vy * 0.1 + (Math.random() - 0.5) * 0.5,
+                1.0,
+                0.05,
+                3 + Math.random() * 3,
+                Math.random() < 0.5 ? '#fff' : '#ccc',
+                'SMOKE'
+            ));
         }
     }
 }

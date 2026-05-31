@@ -1,5 +1,19 @@
 const changelog = [
   {
+    version: "v0.5.35",
+    date: "2026-05-31",
+    description: "Refactoring: Phase 4 Step 4 - Particle クラス化。全パーティクル生成箇所を new Particle() に変換し、update() を委譲。",
+    details: [
+      "【リファクタリング】js/classes/Particle.js を新規作成。constructor(x,y,vx,vy,life,decay,size,color,type,maxLife,baseSize) + update() を実装",
+      "【リファクタリング】update() は p.x += p.vx; p.y += p.vy; p.life -= this.decay || CONFIG.PARTICLE_DECAY; のみ（splice/filter は行わない）",
+      "【リファクタリング】main.js 内の particles.push({...}) 4箇所 (SPARK/CROSS/DEBRIS_SMOKE/LEVEL_UP_HIT_PARTICLE) を new Particle(...) に変換",
+      "【リファクタリング】Missile.js 内の particles.push({...}) 1箇所 (SMOKE) を new Particle(...) に変換",
+      "【リファクタリング】EffectManager.update() (effects.js) の p.x/p.y/p.life 更新3行を p.update() の1行に置換",
+      "【リファクタリング】updateLevelUpScreen() 内 LEVEL_UP_HIT_PARTICLE 専用ループの p.x/p.y/p.life 更新を p.update() に置換",
+      "【変更なし】drawEffects.js を変更しない。cleanup (splice) は全て EffectManager.update() / updateLevelUpScreen() に残存。型名・プロパティ名（type, decay, maxLife, baseSize）変更なし。update順序・particle発生タイミング・alpha減衰・velocity減衰は変更なし"
+    ]
+  },
+  {
     version: "v0.5.34",
     date: "2026-05-31",
     description: "Refactoring: Phase 4 Step 3 - Missile クラス化。ホーミング・物理演算・噴煙生成を Missile.update(entities) に委譲。",

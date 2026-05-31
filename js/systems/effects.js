@@ -14,9 +14,7 @@ const EffectManager = {
         // パーティクルの更新 (物理演算やダメージを伴わない純粋な視覚エフェクト)
         for (let i = entities.particles.length - 1; i >= 0; i--) {
             let p = entities.particles[i];
-            p.x += p.vx;
-            p.y += p.vy;
-            p.life -= p.decay || CONFIG.PARTICLE_DECAY;
+            p.update();
             if (p.life <= 0) entities.particles.splice(i, 1);
         }
     },

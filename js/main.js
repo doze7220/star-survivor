@@ -450,13 +450,13 @@ class PlayerShip extends Ship {
                 this.vy *= 0.7;
                 // ブレーキ時に火花を散らす
                 if (Math.hypot(this.vx, this.vy) > 1.0 && Math.random() < 0.5) {
-                    entities.particles.push({
-                        x: this.x + (Math.random() - 0.5) * 20,
-                        y: this.y + (Math.random() - 0.5) * 20,
-                        vx: (Math.random() - 0.5) * 4,
-                        vy: (Math.random() - 0.5) * 4,
-                        life: 1.0, decay: 0.05, size: 2 + Math.random() * 2, color: '#f80', type: 'SPARK'
-                    });
+                    entities.particles.push(new Particle(
+                        this.x + (Math.random() - 0.5) * 20,
+                        this.y + (Math.random() - 0.5) * 20,
+                        (Math.random() - 0.5) * 4,
+                        (Math.random() - 0.5) * 4,
+                        1.0, 0.05, 2 + Math.random() * 2, '#f80', 'SPARK'
+                    ));
                 }
             }
 
@@ -1113,13 +1113,13 @@ function damagePlayer(amount) {
             comm.play("オートリペア発動！致命傷を回避しました！", "system");
             // エフェクト生成
             for (let i = 0; i < 30; i++) {
-                entities.particles.push({
-                    x: player.x + (Math.random() - 0.5) * 60,
-                    y: player.y + (Math.random() - 0.5) * 60,
-                    vx: (Math.random() - 0.5) * 3,
-                    vy: (Math.random() - 0.5) * 3,
-                    life: 1.0, decay: 0.02, size: 6 + Math.random() * 6, color: '#0f0', type: 'CROSS'
-                });
+                entities.particles.push(new Particle(
+                    player.x + (Math.random() - 0.5) * 60,
+                    player.y + (Math.random() - 0.5) * 60,
+                    (Math.random() - 0.5) * 3,
+                    (Math.random() - 0.5) * 3,
+                    1.0, 0.02, 6 + Math.random() * 6, '#0f0', 'CROSS'
+                ));
             }
             return; // 死亡回避
         }
@@ -1194,18 +1194,19 @@ function update() {
 
         // 有害な破片が移動する際に後ろに煙パーティクル（軌跡）をはき出す
         if (d.harmful && d.life > 0.1 && Math.random() < 0.25) {
-            entities.particles.push({
-                x: d.x,
-                y: d.y,
-                // 進行方向と逆向きにゆっくり放出する
-                vx: -d.vx * 0.15 + (Math.random() - 0.5) * 0.4,
-                vy: -d.vy * 0.15 + (Math.random() - 0.5) * 0.4,
-                life: 0.6,
-                maxLife: 0.6, // 拡大フェードアウトの基準用
-                decay: CONFIG.DEBRIS_SMOKE_DECAY,
-                type: 'DEBRIS_SMOKE',
-                baseSize: d.size * 1.5 // デブリサイズの1.5倍
-            });
+            entities.particles.push(new Particle(
+                d.x,
+                d.y,
+                -d.vx * 0.15 + (Math.random() - 0.5) * 0.4,
+                -d.vy * 0.15 + (Math.random() - 0.5) * 0.4,
+                0.6,
+                CONFIG.DEBRIS_SMOKE_DECAY,
+                undefined,
+                undefined,
+                'DEBRIS_SMOKE',
+                0.6,
+                d.size * 1.5
+            ));
         }
 
         // 有害な爆発破片の当たり判定
@@ -2077,8 +2078,7 @@ function updateLevelUpScreen() {
         for (let i = entities.particles.length - 1; i >= 0; i--) {
             let p = entities.particles[i];
             if (p.type === 'LEVEL_UP_HIT_PARTICLE') {
-                p.x += p.vx; p.y += p.vy;
-                p.life -= 0.025;
+                p.update();
                 if (p.life <= 0) entities.particles.splice(i, 1);
             }
         }
@@ -2089,14 +2089,17 @@ function updateLevelUpScreen() {
             for (let i = 0; i < 25; i++) {
                 const angle = Math.random() * Math.PI * 2;
                 const speed = 2 + Math.random() * 6;
-                entities.particles.push({
-                    x: selectedX,
-                    y: cardY + 25,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    life: 1.0,
-                    type: 'LEVEL_UP_HIT_PARTICLE'
-                });
+                entities.particles.push(new Particle(
+                    selectedX,
+                    cardY + 25,
+                    Math.cos(angle) * speed,
+                    Math.sin(angle) * speed,
+                    1.0,
+                    0.025,
+                    undefined,
+                    undefined,
+                    'LEVEL_UP_HIT_PARTICLE'
+                ));
             }
         }
 
