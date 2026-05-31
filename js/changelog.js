@@ -1,5 +1,19 @@
 const changelog = [
   {
+    version: "v0.5.36",
+    date: "2026-05-31",
+    description: "Refactoring: Phase 4 Step 5 - Debris クラス化。位置更新・寿命減衰を Debris.update() に委譲。",
+    details: [
+      "【リファクタリング】js/classes/Debris.js を新規作成。constructor(x,y,vx,vy,color,size,life,decay,harmful) + update() を実装",
+      "【リファクタリング】update() は d.x += d.vx; d.y += d.vy; d.life -= d.decay; のみ（particle生成・damage・splice は行わない）",
+      "【リファクタリング】spawnDebris() 内の entities.debris.push({...}) → new Debris(...) に変換",
+      "【リファクタリング】spawnDeathDebris() 内の entities.debris.push({...}) → new Debris(...) に変換",
+      "【リファクタリング】main.js デブリ更新ループの d.x/d.y/d.life 更新2行 → d.update() の1行に置換",
+      "【変更なし】煙パーティクル生成・衝突判定・cleanup(splice) は main.js デブリループ内に残存。drawEffects.js / EffectManager 変更なし。spawnDebris() / spawnDeathDebris() の責務・シグネチャ変更なし",
+      "【保証】デブリ寿命・慣性移動・decay・サイズ・harmful フラグ・発生タイミング・消滅タイミングは変更なし"
+    ]
+  },
+  {
     version: "v0.5.35",
     date: "2026-05-31",
     description: "Refactoring: Phase 4 Step 4 - Particle クラス化。全パーティクル生成箇所を new Particle() に変換し、update() を委譲。",

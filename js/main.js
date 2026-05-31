@@ -1011,16 +1011,16 @@ function spawnDebris(x, y, color, count) {
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = Math.random() * CONFIG.DEBRIS_SPEED_MULT + 1.0;
-        entities.debris.push({
-            x: x, y: y,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-            color: color,
-            size: 2 + Math.random() * 2, // 2〜4pxの小さな破片
-            life: 1.0,
-            decay: 1.0 / 30, // 0.5秒で素早く消滅
-            harmful: false // 被弾時の破片はダメージなし
-        });
+        entities.debris.push(new Debris(
+            x, y,
+            Math.cos(angle) * speed,
+            Math.sin(angle) * speed,
+            color,
+            2 + Math.random() * 2,
+            1.0,
+            1.0 / 30,
+            false
+        ));
     }
 }
 
@@ -1036,16 +1036,16 @@ function spawnDeathDebris(x, y, color, baseVx, baseVy) {
         // すなわち、10px 〜 15px
         const size = CONFIG.PLAYER_SIZE_W / 3 + Math.random() * (CONFIG.PLAYER_SIZE_W / 2 - CONFIG.PLAYER_SIZE_W / 3);
 
-        entities.debris.push({
-            x: x, y: y,
-            vx: baseVx * 0.5 + Math.cos(angle) * speed, // 慣性を50%引き継ぎつつ飛び散る
-            vy: baseVy * 0.5 + Math.sin(angle) * speed,
-            color: color,
-            size: size,
-            life: 1.0,
-            decay: 1.0 / CONFIG.DEBRIS_LIFE, // 5秒で消滅
-            harmful: true // 敵味方問わずダメージあり
-        });
+        entities.debris.push(new Debris(
+            x, y,
+            baseVx * 0.5 + Math.cos(angle) * speed,
+            baseVy * 0.5 + Math.sin(angle) * speed,
+            color,
+            size,
+            1.0,
+            1.0 / CONFIG.DEBRIS_LIFE,
+            true
+        ));
     }
 }
 
@@ -1189,8 +1189,7 @@ function update() {
     // デブリ（破片）の更新と衝突判定
     for (let i = entities.debris.length - 1; i >= 0; i--) {
         let d = entities.debris[i];
-        d.x += d.vx; d.y += d.vy;
-        d.life -= d.decay;
+        d.update();
 
         // 有害な破片が移動する際に後ろに煙パーティクル（軌跡）をはき出す
         if (d.harmful && d.life > 0.1 && Math.random() < 0.25) {
