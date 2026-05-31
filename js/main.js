@@ -637,13 +637,13 @@ class PlayerShip extends Ship {
                 const fireAngle = GAME.controlMode === 'SUBSPACE' ? this.bodyAngle : this.turretAngle;
                 for (let i = 0; i < playerStats.bulletCount; i++) {
                     const spread = (i - (playerStats.bulletCount - 1) / 2) * CONFIG.BULLET_SPREAD_ANGLE;
-                    entities.bullets.push({
-                        x: this.x + Math.cos(fireAngle) * (CONFIG.PLAYER_SIZE_W / 2),
-                        y: this.y + Math.sin(fireAngle) * (CONFIG.PLAYER_SIZE_W / 2),
-                        vx: Math.cos(fireAngle + spread) * CONFIG.BULLET_SPEED + this.vx * 0.5,
-                        vy: Math.sin(fireAngle + spread) * CONFIG.BULLET_SPEED + this.vy * 0.5,
-                        life: CONFIG.BULLET_LIFE
-                    });
+                    entities.bullets.push(new Bullet(
+                        this.x + Math.cos(fireAngle) * (CONFIG.PLAYER_SIZE_W / 2),
+                        this.y + Math.sin(fireAngle) * (CONFIG.PLAYER_SIZE_W / 2),
+                        Math.cos(fireAngle + spread) * CONFIG.BULLET_SPEED + this.vx * 0.5,
+                        Math.sin(fireAngle + spread) * CONFIG.BULLET_SPEED + this.vy * 0.5,
+                        CONFIG.BULLET_LIFE
+                    ));
                 }
             }
         } else if (!isFiringInput) {
@@ -688,18 +688,18 @@ class PlayerShip extends Ship {
 
             for (let i = 0; i < missileCount; i++) {
                 const currentAngle = fireAngle + startOffset + (i * spreadAngle);
-                entities.missiles.push({
-                    x: this.x,
-                    y: this.y,
-                    vx: this.vx + Math.cos(currentAngle) * 5,
-                    vy: this.vy + Math.sin(currentAngle) * 5,
-                    angle: currentAngle,
-                    target: target,
-                    life: finalLife,
-                    speed: finalSpeed,
-                    turnRate: CONFIG.MISSILE_TURN_RATE,
-                    damageMult: dmgMult
-                });
+                entities.missiles.push(new Missile(
+                    this.x,
+                    this.y,
+                    this.vx + Math.cos(currentAngle) * 5,
+                    this.vy + Math.sin(currentAngle) * 5,
+                    currentAngle,
+                    target,
+                    finalLife,
+                    finalSpeed,
+                    CONFIG.MISSILE_TURN_RATE,
+                    dmgMult
+                ));
             }
             comm.play("ミサイル、いってらっしゃーい！");
         }
@@ -965,14 +965,14 @@ class EnemyShip extends Ship {
                     }
 
                     // 敵の弾を発射（照準の揺らぎを反映したthis.angleを使用）
-                    entities.enemyBullets.push({
-                        x: this.x + Math.cos(this.angle) * (CONFIG.ENEMY_SIZE_W / 2),
-                        y: this.y + Math.sin(this.angle) * (CONFIG.ENEMY_SIZE_W / 2),
-                        vx: Math.cos(this.angle) * CONFIG.ENEMY_BULLET_SPEED + this.vx * 0.5,
-                        vy: Math.sin(this.angle) * CONFIG.ENEMY_BULLET_SPEED + this.vy * 0.5,
-                        life: CONFIG.BULLET_LIFE,
-                        damage: CONFIG.ENEMY_BULLET_DAMAGE * (this.attackMult || 1.0)
-                    });
+                    entities.enemyBullets.push(new EnemyBullet(
+                        this.x + Math.cos(this.angle) * (CONFIG.ENEMY_SIZE_W / 2),
+                        this.y + Math.sin(this.angle) * (CONFIG.ENEMY_SIZE_W / 2),
+                        Math.cos(this.angle) * CONFIG.ENEMY_BULLET_SPEED + this.vx * 0.5,
+                        Math.sin(this.angle) * CONFIG.ENEMY_BULLET_SPEED + this.vy * 0.5,
+                        CONFIG.BULLET_LIFE,
+                        CONFIG.ENEMY_BULLET_DAMAGE * (this.attackMult || 1.0)
+                    ));
                 }
             } else {
                 this.heat = Math.max(0, this.heat - CONFIG.HEAT_COOL_RATE);
@@ -1394,14 +1394,14 @@ function update() {
     // 自機の弾の更新
     for (let i = entities.bullets.length - 1; i >= 0; i--) {
         let b = entities.bullets[i];
-        b.x += b.vx; b.y += b.vy; b.life--;
+        b.update();
         if (b.life <= 0) entities.bullets.splice(i, 1);
     }
 
     // 敵の弾の更新と自機への衝突判定
     for (let i = entities.enemyBullets.length - 1; i >= 0; i--) {
         let b = entities.enemyBullets[i];
-        b.x += b.vx; b.y += b.vy; b.life--;
+        b.update();
 
         if (Math.hypot(b.x - player.x, b.y - player.y) < CONFIG.COLLISION_ENEMY_PLAYER) {
             damagePlayer(b.damage || CONFIG.ENEMY_BULLET_DAMAGE);
@@ -1439,42 +1439,7 @@ function update() {
     // --- ミサイル (Missiles) ---
     for (let i = entities.missiles.length - 1; i >= 0; i--) {
         let m = entities.missiles[i];
-        if (m.target && m.target.hp <= 0) m.target = null;
-        if (!m.target && m.life > 60) m.life = 60; // ターゲットロスト時は早めに自爆
-
-        if (m.target) {
-            const tx = m.target.x - m.x;
-            const ty = m.target.y - m.y;
-            let targetAngle = Math.atan2(ty, tx);
-            let diff = targetAngle - m.angle;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            m.angle += Math.sign(diff) * Math.min(Math.abs(diff), m.turnRate);
-        }
-        m.vx += Math.cos(m.angle) * 0.5;
-        m.vy += Math.sin(m.angle) * 0.5;
-        const speed = Math.hypot(m.vx, m.vy);
-        if (speed > m.speed) {
-            m.vx = (m.vx / speed) * m.speed;
-            m.vy = (m.vy / speed) * m.speed;
-        }
-        m.x += m.vx;
-        m.y += m.vy;
-
-        // 噴煙（スモーク）の生成
-        if (Math.random() < 0.6) {
-            entities.particles.push({
-                x: m.x - Math.cos(m.angle) * 8, // ミサイル後方から
-                y: m.y - Math.sin(m.angle) * 8,
-                vx: m.vx * 0.1 + (Math.random() - 0.5) * 0.5,
-                vy: m.vy * 0.1 + (Math.random() - 0.5) * 0.5,
-                life: 1.0,
-                decay: 0.05,
-                size: 3 + Math.random() * 3,
-                color: Math.random() < 0.5 ? '#fff' : '#ccc',
-                type: 'SMOKE'
-            });
-        }
+        m.update(entities);
 
         // 敵との当たり判定
         let hit = false;
@@ -1502,17 +1467,18 @@ function update() {
                     } else if (entities.enemyMothership && !entities.enemyMothership.isDead) {
                         target = entities.enemyMothership;
                     }
-                    entities.missiles.push({
-                        x: m.x, y: m.y,
-                        vx: (Math.random() - 0.5) * 10,
-                        vy: (Math.random() - 0.5) * 10,
-                        angle: Math.random() * Math.PI * 2,
-                        speed: CONFIG.MISSILE_SPEED * 1.2,
-                        turnRate: CONFIG.MISSILE_TURN_RATE * 1.5,
-                        life: CONFIG.MISSILE_LIFE * 0.4,
-                        target: target,
-                        isSubMunition: true
-                    });
+                    entities.missiles.push(new Missile(
+                        m.x, m.y,
+                        (Math.random() - 0.5) * 10,
+                        (Math.random() - 0.5) * 10,
+                        Math.random() * Math.PI * 2,
+                        target,
+                        CONFIG.MISSILE_LIFE * 0.4,
+                        CONFIG.MISSILE_SPEED * 1.2,
+                        CONFIG.MISSILE_TURN_RATE * 1.5,
+                        1.0,
+                        true
+                    ));
                 }
             }
 
@@ -1657,13 +1623,13 @@ function update() {
                 // Limit Burst: Scatter Shot (bulletCount >= 6)
                 if ((playerStats.upgrades.bulletCount || 0) >= 6 && !b.isScatter) {
                     for (let k = 0; k < 3; k++) {
-                        entities.bullets.push({
-                            x: b.x, y: b.y,
-                            vx: (Math.random() - 0.5) * 20,
-                            vy: (Math.random() - 0.5) * 20,
-                            life: 15,
-                            isScatter: true
-                        });
+                        entities.bullets.push(new Bullet(
+                            b.x, b.y,
+                            (Math.random() - 0.5) * 20,
+                            (Math.random() - 0.5) * 20,
+                            15,
+                            true
+                        ));
                     }
                 }
 
@@ -1756,13 +1722,13 @@ function update() {
                 // Limit Burst: Scatter Shot (bulletCount >= 6)
                 if ((playerStats.upgrades.bulletCount || 0) >= 6 && !b.isScatter) {
                     for (let k = 0; k < 3; k++) {
-                        entities.bullets.push({
-                            x: b.x, y: b.y,
-                            vx: (Math.random() - 0.5) * 20,
-                            vy: (Math.random() - 0.5) * 20,
-                            life: 15,
-                            isScatter: true
-                        });
+                        entities.bullets.push(new Bullet(
+                            b.x, b.y,
+                            (Math.random() - 0.5) * 20,
+                            (Math.random() - 0.5) * 20,
+                            15,
+                            true
+                        ));
                     }
                 }
 
@@ -1790,17 +1756,18 @@ function update() {
                         } else if (entities.enemyMothership && !entities.enemyMothership.isDead) {
                             target = entities.enemyMothership;
                         }
-                        entities.missiles.push({
-                            x: m.x, y: m.y,
-                            vx: (Math.random() - 0.5) * 10,
-                            vy: (Math.random() - 0.5) * 10,
-                            angle: Math.random() * Math.PI * 2,
-                            speed: CONFIG.MISSILE_SPEED * 1.2,
-                            turnRate: CONFIG.MISSILE_TURN_RATE * 1.5,
-                            life: CONFIG.MISSILE_LIFE * 0.4,
-                            target: target,
-                            isSubMunition: true
-                        });
+                        entities.missiles.push(new Missile(
+                            m.x, m.y,
+                            (Math.random() - 0.5) * 10,
+                            (Math.random() - 0.5) * 10,
+                            Math.random() * Math.PI * 2,
+                            target,
+                            CONFIG.MISSILE_LIFE * 0.4,
+                            CONFIG.MISSILE_SPEED * 1.2,
+                            CONFIG.MISSILE_TURN_RATE * 1.5,
+                            1.0,
+                            true
+                        ));
                     }
                 }
 

@@ -1,5 +1,42 @@
 const changelog = [
   {
+    version: "v0.5.34",
+    date: "2026-05-31",
+    description: "Refactoring: Phase 4 Step 3 - Missile クラス化。ホーミング・物理演算・噴煙生成を Missile.update(entities) に委譲。",
+    details: [
+      "【リファクタリング】js/classes/Missile.js を新規作成。constructor(x,y,vx,vy,angle,target,life,speed,turnRate,damageMult,isSubMunition) + update(entities) を実装",
+      "【リファクタリング】update() にホーミング角度補正（while 正規化含む）・加速度加算・speed clamp・座標更新・噴煙パーティクル生成を移植",
+      "【リファクタリング】PlayerShip.update() 内の発射 push → new Missile(...) に変更",
+      "【リファクタリング】main.js のミサイル更新ループ（L1440–L1477 相当）を m.update(entities) の1行に置換",
+      "【リファクタリング】Sub-Munition 生成箇所（敵機衝突・母艦衝突の2箇所）→ new Missile(..., isSubMunition=true) に変更",
+      "【変更なし】衝突判定（対Enemy / 対EnemyMothership）・Sub-Munition 生成条件・cleanup・draw は main.js に残存",
+      "【保証】atan2・while 正規化・speed clamp・推力 0.5 の計算式は元コードと完全一致。update 順序・collision 順序・particle 発生タイミングは変更なし"
+    ]
+  },
+  {
+    version: "v0.5.33",
+    date: "2026-05-31",
+    description: "Refactoring: Phase 4 Step 2 - EnemyBullet クラス化。位置更新・寿命デクリメントを EnemyBullet.update() に委譲。",
+    details: [
+      "【リファクタリング】js/classes/EnemyBullet.js を新規作成。constructor(x,y,vx,vy,life,damage) + update() を実装",
+      "【リファクタリング】EnemyShip.update() 内の entities.enemyBullets.push({...}) → new EnemyBullet(...) に変更",
+      "【リファクタリング】main.js の敵弾更新ループ内 b.x += b.vx; b.y += b.vy; b.life--; → b.update() に置換",
+      "【変更なし】衝突判定（対Player / 対Missile）・cleanup・draw は main.js に残存。damage 量・発射タイミング変更なし"
+    ]
+  },
+  {
+    version: "v0.5.32",
+    date: "2026-05-31",
+    description: "Refactoring: Phase 4 Step 1 - Bullet クラス化。位置更新・寿命デクリメントを Bullet.update() に委譲。",
+    details: [
+      "【リファクタリング】js/classes/Bullet.js を新規作成。constructor(x,y,vx,vy,life,isScatter=false) + update() を実装",
+      "【リファクタリング】PlayerShip.update() 内の entities.bullets.push({...}) → new Bullet(...) に変更",
+      "【リファクタリング】main.js の弾更新ループ内 b.x += b.vx; b.y += b.vy; b.life--; → b.update() に置換",
+      "【リファクタリング】Scatter Shot 生成箇所 2 箇所（敵機衝突・母艦衝突）→ new Bullet(..., true) に変更",
+      "【変更なし】衝突判定・cleanup・draw は main.js に残存。弾速・射程・Scatter Shot 挙動変更なし"
+    ]
+  },
+  {
     version: "v0.5.31",
     date: "2026-05-28",
     description: "Refactoring: Phase 3 Step 3 - EnemyShip.update() を実装し敵AIロジックをカプセル化。",
